@@ -1,5 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
+import InventoryPage from '../pages/inventory/InventoryPage';
+import InventoryManage from '../pages/inventory/InventoryManage';
 
 export const inventoryRoutes: RouteObject[] = [
   {
@@ -8,7 +10,11 @@ export const inventoryRoutes: RouteObject[] = [
     children: [
       {
         path: '',
-        element: <div className="text-2xl font-light">Inventory tracking coming soon...</div>,
+        element: <InventoryPage />,
+      },
+      {
+        path: 'manage',
+        element: <InventoryManage />,
       }
     ]
   }

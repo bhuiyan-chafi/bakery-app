@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from enum import Enum
 from app.extensions import db
 
@@ -16,3 +17,68 @@ class ProductCategory(db.Model):
 
     def __repr__(self):
         return f'<ProductCategory {self.name}>'
+
+
+class Product(db.Model):
+    __tablename__ = 'products'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    category_uuid = db.Column(db.String(36), db.ForeignKey('product_categories.uuid'), nullable=False)
+    price = db.Column(db.Float, nullable=False, default=0.0)
+
+    def __repr__(self):
+        return f'<Product {self.name}>'
+
+
+class Recipe(db.Model):
+    __tablename__ = 'recipes'
+    __table_args__ = (db.UniqueConstraint('product_uuid', 'name', name='uq_recipe_product_name'),)
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    instructions = db.Column(db.Text, nullable=True)
+
+    ingredients = db.relationship('RecipeIngredient', backref='recipe', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<Recipe {self.name} for product {self.product_uuid}>'
+
+class RecipeIngredient(db.Model):
+    __tablename__ = 'recipe_ingredients'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=False)
+    inventory_uuid = db.Column(db.String(36), db.ForeignKey('inventory.uuid'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f'<RecipeIngredient {self.inventory_uuid} x{self.quantity}>'
+
+
+class YieldType(Enum):
+    SINGLE = "single"
+    BATCH = "batch"
+
+
+class ProductionStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+
+
+class Production(db.Model):
+    __tablename__ = 'productions'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
+    recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=False)
+    yield_type = db.Column(db.Enum(YieldType, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    batch_quantity = db.Column(db.Float, nullable=True)
+    status = db.Column(db.Enum(ProductionStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=ProductionStatus.PENDING)
+    produced_at = db.Column(db.DateTime, nullable=True)  # set only when status → completed
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<Production {self.uuid} - {self.status.value}>'
