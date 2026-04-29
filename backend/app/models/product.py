@@ -26,6 +26,7 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     category_uuid = db.Column(db.String(36), db.ForeignKey('product_categories.uuid'), nullable=False)
     price = db.Column(db.Float, nullable=False, default=0.0)
+    stock_threshold = db.Column(db.Float, nullable=False, default=0.0)  # alert when stock <= this
 
     def __repr__(self):
         return f'<Product {self.name}>'
@@ -82,3 +83,26 @@ class Production(db.Model):
 
     def __repr__(self):
         return f'<Production {self.uuid} - {self.status.value}>'
+
+
+class ProductTransactionType(Enum):
+    IN = "IN"    # units produced / received
+    OUT = "OUT"  # units sold / consumed
+
+
+class ProductTransaction(db.Model):
+    __tablename__ = 'product_transactions'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
+    production_uuid = db.Column(db.String(36), db.ForeignKey('productions.uuid'), nullable=True)  # null for manual OUT
+    transaction_type = db.Column(
+        db.Enum(ProductTransactionType, values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False
+    )
+    quantity = db.Column(db.Float, nullable=False)  # always > 0; 1 for single, batch_qty for batch
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<ProductTransaction {self.transaction_type.value} x{self.quantity} for {self.product_uuid}>'

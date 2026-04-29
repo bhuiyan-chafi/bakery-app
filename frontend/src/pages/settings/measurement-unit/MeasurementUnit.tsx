@@ -8,7 +8,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -127,7 +128,12 @@ export default function MeasurementUnit() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-light tracking-tight">Measurement Units</h1>
+          <div className="flex items-center gap-2 mb-1">
+            <Link to="/settings" className="text-muted-foreground hover:text-black transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <h1 className="text-3xl font-light tracking-tight">Measurement Units</h1>
+          </div>
           <p className="text-muted-foreground mt-1">Manage units of measurement for inventory and production.</p>
         </div>
 

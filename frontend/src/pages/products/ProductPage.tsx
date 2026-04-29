@@ -44,6 +44,8 @@ interface Product {
   category_uuid: string;
   category_name: string;
   price: number;
+  stock_threshold: number;
+  current_stock: number;
 }
 
 interface Category {
@@ -66,6 +68,7 @@ export default function ProductPage() {
   const [selectedCategoryUuid, setSelectedCategoryUuid] = useState("");
   const [selectedCategoryName, setSelectedCategoryName] = useState("Select a category");
   const [price, setPrice] = useState("0");
+  const [stockThreshold, setStockThreshold] = useState("0");
 
   useEffect(() => {
     fetchProducts();
@@ -77,6 +80,8 @@ export default function ProductPage() {
       const response = await fetch(`${API_BASE_URL}/products/`);
       if (!response.ok) throw new Error("Failed to fetch products");
       const data = await response.json();
+      // console.log("[ProductPage] raw API response:", data);
+      // console.log("[ProductPage] current_stock values:", data.map((p: any) => ({ name: p.name, current_stock: p.current_stock, type: typeof p.current_stock })));
       setProducts(data);
     } catch (error: any) {
       toast.error(error.message);
@@ -110,6 +115,7 @@ export default function ProductPage() {
     setSelectedCategoryUuid("");
     setSelectedCategoryName("Select a category");
     setPrice("0");
+    setStockThreshold("0");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,6 +137,7 @@ export default function ProductPage() {
           name,
           category_uuid: selectedCategoryUuid,
           price: parseFloat(price) || 0,
+          stock_threshold: parseFloat(stockThreshold) || 0,
         }),
       });
 
@@ -156,6 +163,7 @@ export default function ProductPage() {
     setSelectedCategoryUuid(p.category_uuid);
     setSelectedCategoryName(p.category_name);
     setPrice(String(p.price));
+    setStockThreshold(String(p.stock_threshold ?? 0));
     setIsModalOpen(true);
   };
 
@@ -286,6 +294,21 @@ export default function ProductPage() {
                   </div>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="product-threshold">Stock Alert Threshold</Label>
+                  <p className="text-xs text-zinc-400">Show an alert when stock drops to or below this quantity. Set to 0 to disable.</p>
+                  <Input
+                    id="product-threshold"
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="e.g. 10"
+                    value={stockThreshold}
+                    onChange={(e) => setStockThreshold(e.target.value)}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
                 <DialogFooter>
                   <Button type="submit" disabled={isSubmitting} className="bg-black text-white hover:bg-zinc-800">
                     {isSubmitting ? "Processing..." : (editUuid ? "Update Product" : "Save Product")}
@@ -305,19 +328,20 @@ export default function ProductPage() {
               <TableHead className="font-medium">Name</TableHead>
               <TableHead className="font-medium">Category</TableHead>
               <TableHead className="font-medium">Price</TableHead>
+              <TableHead className="font-medium">Current Stock</TableHead>
               <TableHead className="text-right font-medium">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
                   Loading products...
                 </TableCell>
               </TableRow>
             ) : products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
                   No products found. Click "Add Product" to get started.
                 </TableCell>
               </TableRow>
@@ -327,6 +351,26 @@ export default function ProductPage() {
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-zinc-500">{p.category_name}</TableCell>
                   <TableCell className="text-zinc-500">${p.price.toFixed(2)}</TableCell>
+                  <TableCell>
+                    {(() => {
+                      const stock = p.current_stock ?? 0;
+                      const threshold = p.stock_threshold ?? 0;
+                      const isLow = threshold > 0 && stock <= threshold;
+                      const isEmpty = stock === 0;
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isEmpty && threshold > 0
+                            ? "bg-red-100 text-red-700"
+                            : isLow
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}>
+                          {isLow && <span>⚠</span>}
+                          {stock} units
+                        </span>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button

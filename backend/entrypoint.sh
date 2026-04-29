@@ -1,18 +1,19 @@
 #!/bin/sh
 
-# Exit immediately if a command exits with a non-zero status
 set -e
 
 echo "Waiting for database..."
-# You could add a wait-for-it script here if needed, 
-# but docker-compose healthchecks usually handle this.
 
-echo "Applying database migrations..."
-if [ ! -d "migrations" ]; then
-    flask db init
-fi
-flask db migrate -m "Initial migration" || true
-flask db upgrade
+echo "Creating database tables from models..."
+python -c "
+from app import create_app
+from app.extensions import db
+
+app = create_app()
+with app.app_context():
+    db.create_all()
+    print('All tables created.')
+"
 
 echo "Seeding database..."
 flask seed-db

@@ -10,6 +10,7 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-dev-secret-key')
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 86400  # 24 hours
 
     # Initialize extensions
     db.init_app(app)
@@ -23,14 +24,18 @@ def create_app():
     from app.routes.product import product_bp
     from app.routes.settings import settings_bp
     from app.routes.inventory import inventory_bp
+    from app.routes.order import order_bp
+    from app.routes.user import user_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(product_bp, url_prefix='/api/products')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
+    app.register_blueprint(order_bp, url_prefix='/api/orders')
 
     # Import all models so Alembic can detect them for migrations
-    from app.models import user, product, settings, inventory  # noqa: F401
+    from app.models import user, product, settings, inventory, order  # noqa: F401
 
     
     # Register CLI commands

@@ -5,6 +5,7 @@ import { dashboardRoutes } from './dashboardRoutes';
 import { productRoutes } from './productRoutes';
 import { inventoryRoutes } from './inventoryRoutes';
 import { settingsRoutes } from './settingsRoutes';
+import { orderRoutes } from './orderRoutes';
 
 const router = createBrowserRouter([
   ...publicRoutes,
@@ -13,6 +14,7 @@ const router = createBrowserRouter([
   ...productRoutes,
   ...inventoryRoutes,
   ...settingsRoutes,
+  ...orderRoutes,
 ]);
 
 export default router;

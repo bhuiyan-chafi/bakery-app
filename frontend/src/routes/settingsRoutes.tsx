@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import SettingsPage from '../pages/settings/SettingsPage';
 import MeasurementUnit from '../pages/settings/measurement-unit/MeasurementUnit';
+import PermissionManagement from '../pages/settings/permissions/PermissionManagement';
 
 export const settingsRoutes: RouteObject[] = [
   {
@@ -15,6 +16,10 @@ export const settingsRoutes: RouteObject[] = [
       {
         path: 'measurement-unit',
         element: <MeasurementUnit />,
+      },
+      {
+        path: 'permissions',
+        element: <PermissionManagement />,
       }
     ]
   }

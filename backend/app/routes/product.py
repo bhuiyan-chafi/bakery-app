@@ -97,17 +97,34 @@ def search_categories(query):
 
 @product_bp.route('/', methods=['GET'])
 def get_products():
-    from app.models.product import Product
+    from app.models.product import Product, ProductTransaction, ProductTransactionType
+    from sqlalchemy import func
+
     products = Product.query.order_by(Product.name).limit(50).all()
     result = []
     for p in products:
         category = ProductCategory.query.get(p.category_uuid)
+
+        total_in = db.session.query(func.sum(ProductTransaction.quantity)).filter(
+            ProductTransaction.product_uuid == p.uuid,
+            ProductTransaction.transaction_type == "IN"
+        ).scalar() or 0.0
+
+        total_out = db.session.query(func.sum(ProductTransaction.quantity)).filter(
+            ProductTransaction.product_uuid == p.uuid,
+            ProductTransaction.transaction_type == "OUT"
+        ).scalar() or 0.0
+
+        current_stock = max(round(total_in - total_out, 4), 0.0)
+
         result.append({
             "uuid": p.uuid,
             "name": p.name,
             "category_uuid": p.category_uuid,
             "category_name": category.name if category else None,
-            "price": p.price
+            "price": p.price,
+            "stock_threshold": p.stock_threshold,
+            "current_stock": current_stock
         })
     return jsonify(result), 200
 
@@ -118,6 +135,7 @@ def add_product():
     name = data.get('name')
     category_uuid = data.get('category_uuid')
     price = data.get('price', 0.0)
+    stock_threshold = data.get('stock_threshold', 0.0)
 
     if not name:
         return jsonify({"error": "Product name is required"}), 400
@@ -126,7 +144,7 @@ def add_product():
     if not ProductCategory.query.get(category_uuid):
         return jsonify({"error": "Category not found"}), 404
 
-    product = Product(name=name, category_uuid=category_uuid, price=float(price))
+    product = Product(name=name, category_uuid=category_uuid, price=float(price), stock_threshold=float(stock_threshold))
     db.session.add(product)
     db.session.commit()
     return jsonify({"message": "Product added successfully", "uuid": product.uuid}), 201
@@ -145,6 +163,8 @@ def update_product(uuid):
         product.category_uuid = data['category_uuid']
     if 'price' in data:
         product.price = float(data['price'])
+    if 'stock_threshold' in data:
+        product.stock_threshold = float(data['stock_threshold'])
 
     db.session.commit()
     return jsonify({"message": "Product updated successfully"}), 200
@@ -420,8 +440,9 @@ def add_production(product_uuid):
 
 @product_bp.route('/<product_uuid>/production/<prod_uuid>', methods=['PUT'])
 def update_production_status(product_uuid, prod_uuid):
-    from app.models.product import Production, ProductionStatus
+    from app.models.product import Production, ProductionStatus, YieldType, ProductTransaction, ProductTransactionType
     from datetime import datetime as dt
+
     production = Production.query.filter_by(uuid=prod_uuid, product_uuid=product_uuid).first_or_404()
     data = request.get_json()
     new_status_val = data.get('status')
@@ -435,8 +456,27 @@ def update_production_status(product_uuid, prod_uuid):
         return jsonify({"error": f"Invalid status. Must be one of: {[e.value for e in ProductionStatus]}"}), 400
 
     production.status = new_status
+
     if new_status == ProductionStatus.COMPLETED:
         production.produced_at = dt.utcnow()
+
+        # Resolve effective quantity:
+        # - BATCH: use stored batch_quantity
+        # - SINGLE: quantity is always 1 (not stored in productions)
+        effective_qty = (
+            production.batch_quantity
+            if production.yield_type == YieldType.BATCH and production.batch_quantity
+            else 1.0
+        )
+
+        product_tx = ProductTransaction(
+            product_uuid=production.product_uuid,
+            production_uuid=production.uuid,
+            transaction_type=ProductTransactionType.IN,
+            quantity=effective_qty,
+            notes=f"Auto-created on production completion ({production.yield_type.value})"
+        )
+        db.session.add(product_tx)
 
     db.session.commit()
     return jsonify({"message": f"Status updated to '{new_status_val}'"}), 200

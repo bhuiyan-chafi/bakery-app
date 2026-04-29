@@ -16,6 +16,10 @@ class UserStatus(Enum):
     PENDING = "pending"
     APPROVED = "approved"
 
+class UserPermissionStatus(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -30,6 +34,9 @@ class User(db.Model):
 
     # Relationship to UserDetails
     details = db.relationship('UserDetails', backref='user', uselist=False, cascade="all, delete-orphan")
+    
+    # Relationship to UserPermissions
+    permissions = db.relationship('UserPermission', backref='user', cascade="all, delete-orphan")
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -51,3 +58,30 @@ class UserDetails(db.Model):
 
     def __repr__(self):
         return f'<UserDetails for {self.user_id}>'
+
+class Permission(db.Model):
+    __tablename__ = 'permissions'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(100), unique=True, nullable=False) # e.g. "user:create", "order:read"
+
+    def __repr__(self):
+        return f'<Permission {self.name}>'
+
+class UserPermission(db.Model):
+    __tablename__ = 'user_permissions'
+    __table_args__ = (
+        db.UniqueConstraint('user_uuid', 'permission_uuid', name='uq_user_permission'),
+    )
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_uuid = db.Column(db.String(36), db.ForeignKey('users.uuid'), nullable=False)
+    permission_uuid = db.Column(db.String(36), db.ForeignKey('permissions.uuid'), nullable=False)
+    status = db.Column(db.Enum(UserPermissionStatus), default=UserPermissionStatus.ACTIVE, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship to the Permission model
+    permission = db.relationship('Permission', backref='user_assignments')
+
+    def __repr__(self):
+        return f'<UserPermission {self.user_uuid} - {self.permission_uuid}>'
