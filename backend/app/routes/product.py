@@ -324,8 +324,8 @@ def get_productions(product_uuid):
             "uuid": p.uuid,
             "recipe_uuid": p.recipe_uuid,
             "recipe_name": recipe.name if recipe else None,
-            "yield_type": p.yield_type.value,
             "batch_quantity": p.batch_quantity,
+            "damaged_quantity": p.damaged_quantity,
             "status": p.status.value,
             "produced_at": p.produced_at.isoformat() if p.produced_at else None,
             "notes": p.notes
@@ -335,7 +335,7 @@ def get_productions(product_uuid):
 
 @product_bp.route('/<product_uuid>/production', methods=['POST'])
 def add_production(product_uuid):
-    from app.models.product import Product, Recipe, Production, YieldType, ProductionStatus
+    from app.models.product import Product, Recipe, Production, ProductionStatus
     from app.models.inventory import Inventory, InventoryTransaction, TransactionType, TransactionStatus
     from app.models.settings import UnitMeasurement
     from sqlalchemy import func
@@ -344,30 +344,21 @@ def add_production(product_uuid):
     data = request.get_json()
 
     recipe_uuid = data.get('recipe_uuid')
-    yield_type_val = data.get('yield_type')
-    batch_quantity = data.get('batch_quantity', None)
+    batch_quantity = data.get('batch_quantity', 1.0)
     notes = data.get('notes', None)
 
     if not recipe_uuid:
         return jsonify({"error": "recipe_uuid is required"}), 400
-    if not yield_type_val:
-        return jsonify({"error": "yield_type is required"}), 400
+    
+    if not batch_quantity or float(batch_quantity) <= 0:
+        return jsonify({"error": "batch_quantity must be > 0"}), 400
 
     recipe = Recipe.query.get(recipe_uuid)
     if not recipe:
         return jsonify({"error": "Recipe not found"}), 404
 
-    try:
-        y_type = YieldType(yield_type_val)
-    except ValueError:
-        return jsonify({"error": f"Invalid yield_type. Must be one of: {[e.value for e in YieldType]}"}), 400
-
-    if y_type == YieldType.BATCH:
-        if not batch_quantity or float(batch_quantity) <= 0:
-            return jsonify({"error": "batch_quantity must be > 0 for batch yield"}), 400
-
-    # Multiplier: 1 for single, batch_quantity for batch
-    multiplier = float(batch_quantity) if y_type == YieldType.BATCH else 1.0
+    # Multiplier is exactly the batch_quantity
+    multiplier = float(batch_quantity)
 
     # ── Stock check for every ingredient ──────────────────────────
     shortfalls = []
@@ -416,8 +407,7 @@ def add_production(product_uuid):
     production = Production(
         product_uuid=product_uuid,
         recipe_uuid=recipe_uuid,
-        yield_type=y_type,
-        batch_quantity=float(batch_quantity) if batch_quantity else None,
+        batch_quantity=float(batch_quantity),
         status=ProductionStatus.PENDING,
         produced_at=None,
         notes=notes
@@ -440,7 +430,7 @@ def add_production(product_uuid):
 
 @product_bp.route('/<product_uuid>/production/<prod_uuid>', methods=['PUT'])
 def update_production_status(product_uuid, prod_uuid):
-    from app.models.product import Production, ProductionStatus, YieldType, ProductTransaction, ProductTransactionType
+    from app.models.product import Production, ProductionStatus, ProductTransaction, ProductTransactionType
     from datetime import datetime as dt
 
     production = Production.query.filter_by(uuid=prod_uuid, product_uuid=product_uuid).first_or_404()
@@ -458,23 +448,28 @@ def update_production_status(product_uuid, prod_uuid):
     production.status = new_status
 
     if new_status == ProductionStatus.COMPLETED:
+        damaged_qty_val = data.get('damaged_quantity', 0.0)
+        try:
+            damaged_qty = float(damaged_qty_val)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid damaged_quantity. Must be a number."}), 400
+
+        if damaged_qty < 0:
+            return jsonify({"error": "damaged_quantity cannot be negative."}), 400
+        if damaged_qty > production.batch_quantity:
+            return jsonify({"error": f"damaged_quantity ({damaged_qty}) cannot exceed batch_quantity ({production.batch_quantity})."}), 400
+
+        production.damaged_quantity = damaged_qty
         production.produced_at = dt.utcnow()
 
-        # Resolve effective quantity:
-        # - BATCH: use stored batch_quantity
-        # - SINGLE: quantity is always 1 (not stored in productions)
-        effective_qty = (
-            production.batch_quantity
-            if production.yield_type == YieldType.BATCH and production.batch_quantity
-            else 1.0
-        )
+        effective_qty = production.batch_quantity - production.damaged_quantity
 
         product_tx = ProductTransaction(
             product_uuid=production.product_uuid,
             production_uuid=production.uuid,
             transaction_type=ProductTransactionType.IN,
             quantity=effective_qty,
-            notes=f"Auto-created on production completion ({production.yield_type.value})"
+            notes=f"Auto-created on production completion"
         )
         db.session.add(product_tx)
 
@@ -489,3 +484,10 @@ def delete_production(product_uuid, prod_uuid):
     db.session.delete(production)
     db.session.commit()
     return jsonify({"message": "Production deleted"}), 200
+
+
+@product_bp.route('/production/active', methods=['GET'])
+def get_active_productions_count():
+    from app.models.product import Production, ProductionStatus
+    count = Production.query.filter_by(status=ProductionStatus.RUNNING).count()
+    return jsonify({"count": count}), 200

@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2, ShoppingCart, ClipboardList, Tag, Percent } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, ClipboardList, Tag, Percent, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+import { API_BASE_URL } from "@/config/constants";
 
 interface Product {
   uuid: string;
@@ -43,6 +44,10 @@ const STATUS_STYLES: Record<string, string> = {
 let lineIdCounter = 1;
 
 export default function OrderPage() {
+  const userStr = localStorage.getItem('user');
+  const currentUser = userStr ? JSON.parse(userStr) : null;
+  const username = currentUser?.username ?? null;
+
   const [products, setProducts] = useState<Product[]>([]);
 
   // Customer / order meta
@@ -63,6 +68,8 @@ export default function OrderPage() {
 
   // Submission
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Open state for per-line product combobox (tracks line.id)
+  const [openComboLine, setOpenComboLine] = useState<number | null>(null);
 
   const derivedStatus = ORDER_TYPE_STATUS[orderType];
 
@@ -179,6 +186,7 @@ export default function OrderPage() {
         order_type: orderType,
         status: derivedStatus,
         notes: notes.trim() || null,
+        sold_by: username,
         discount_type: discountMode,
         discount_value: parseFloat(discountValue) || 0,
         subtotal,
@@ -241,7 +249,7 @@ export default function OrderPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cust-phone">Phone</Label>
-                <Input id="cust-phone" placeholder="+880 1700 000000" value={phone} onChange={e => setPhone(e.target.value)} />
+                <Input id="cust-phone" placeholder="+xxx xxx xxx xxxx" value={phone} onChange={e => setPhone(e.target.value)} />
               </div>
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="cust-address">Address</Label>
@@ -289,21 +297,56 @@ export default function OrderPage() {
             <div className="space-y-2">
               {lines.map((line, idx) => (
                 <div key={line.id} className="grid grid-cols-12 gap-2 items-center">
-                  {/* Product select */}
+                  {/* Product searchable combobox */}
                   <div className="col-span-12 sm:col-span-4">
-                    <Select
-                      value={line.product_uuid}
-                      onValueChange={v => handleProductSelect(line.id, v)}
+                    <Popover
+                      open={openComboLine === line.id}
+                      onOpenChange={open => setOpenComboLine(open ? line.id : null)}
                     >
-                      <SelectTrigger className={cn("h-9", !line.product_uuid && "border-zinc-200")}>
-                        <SelectValue placeholder="Select product..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map(p => (
-                          <SelectItem key={p.uuid} value={p.uuid}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "h-9 w-full justify-between font-normal",
+                            !line.product_uuid && "text-zinc-400 border-zinc-200"
+                          )}
+                        >
+                          <span className="truncate">
+                            {line.product_name || "Select product..."}
+                          </span>
+                          <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-50" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search products..." />
+                          <CommandList>
+                            <CommandEmpty>No products found.</CommandEmpty>
+                            <CommandGroup>
+                              {products.map(p => (
+                                <CommandItem
+                                  key={p.uuid}
+                                  value={p.name}
+                                  onSelect={() => {
+                                    handleProductSelect(line.id, p.uuid);
+                                    setOpenComboLine(null);
+                                  }}
+                                >
+                                  <span className="flex-1 truncate">{p.name}</span>
+                                  <span className={cn(
+                                    "text-xs tabular-nums ml-2 shrink-0",
+                                    p.current_stock === 0 ? "text-red-400" : "text-zinc-400"
+                                  )}>
+                                    {p.current_stock} in stock
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
 
                   {/* Current stock (readonly) */}

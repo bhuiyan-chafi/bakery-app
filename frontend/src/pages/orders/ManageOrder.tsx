@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Trash2, Pencil, Eye, X, Printer } from "lucide-react";
+import { ArrowLeft, Trash2, Pencil, Eye, X, Printer, Check, ChevronsUpDown } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
-import { APP_NAME } from "@/config/constants";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+import { APP_NAME, API_BASE_URL } from "@/config/constants";
 
 interface Order {
   uuid: string;
@@ -29,6 +29,7 @@ interface Order {
   subtotal: number;
   total: number;
   notes: string | null;
+  sold_by: string | null;
   created_at: string;
 }
 
@@ -74,12 +75,29 @@ export default function ManageOrder() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
+  // Products list for editing
+  const [products, setProducts] = useState<any[]>([]);
+
   // Edit modal
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editForm, setEditForm] = useState({
-    customer_name: "", phone: "", address: "", status: "", notes: ""
+    customer_name: "", phone: "", address: "", notes: "", discount_type: "amount", discount_value: "0"
   });
+  const [editItems, setEditItems] = useState<OrderItem[]>([]);
+  const [isEditLoading, setIsEditLoading] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+  const [productComboOpen, setProductComboOpen] = useState(false);
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/products/`);
+      if (!res.ok) throw new Error("Failed to load products");
+      const data = await res.json();
+      setProducts(data);
+    } catch (err: any) {
+      console.error("Error loading products:", err);
+    }
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
@@ -95,7 +113,10 @@ export default function ManageOrder() {
     }
   }, []);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, [fetchOrders, fetchProducts]);
 
   const openDetail = async (uuid: string) => {
     setIsDetailLoading(true);
@@ -134,26 +155,122 @@ export default function ManageOrder() {
     }
   };
 
-  const openEdit = (order: Order, e: React.MouseEvent) => {
+  const handleApprove = async (uuid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Approve this order? This will mark it as Complete and cannot be undone.")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/${uuid}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "complete" }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to approve order");
+      }
+      toast.success("Order approved and marked as Complete");
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const openEdit = async (order: Order, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingOrder(order);
+    setIsEditLoading(true);
     setEditForm({
       customer_name: order.customer_name,
       phone: order.phone || "",
       address: order.address || "",
-      status: order.status,
       notes: order.notes || "",
+      discount_type: order.discount_type || "amount",
+      discount_value: (order.discount_value ?? 0).toString(),
     });
+    setEditItems([]);
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/${order.uuid}`);
+      if (!res.ok) throw new Error("Failed to load order items for editing");
+      const data: OrderDetail = await res.json();
+      setEditItems(data.items || []);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsEditLoading(false);
+    }
   };
 
   const closeEdit = () => {
     setEditingOrder(null);
+    setEditItems([]);
+  };
+
+  const addProductToOrder = (productUuid: string) => {
+    const product = products.find(p => p.uuid === productUuid);
+    if (!product) return;
+
+    setEditItems(prev => {
+      const exists = prev.find(item => item.product_uuid === productUuid);
+      if (exists) {
+        return prev.map(item =>
+          item.product_uuid === productUuid
+            ? { ...item, quantity: item.quantity + 1, line_total: (item.quantity + 1) * item.unit_price }
+            : item
+        );
+      } else {
+        return [
+          ...prev,
+          {
+            uuid: "",
+            product_uuid: productUuid,
+            product_name: product.name,
+            quantity: 1,
+            unit_price: product.price || 0,
+            line_total: product.price || 0,
+          }
+        ];
+      }
+    });
+  };
+
+  const updateItemQty = (productUuid: string, qtyStr: string) => {
+    const val = parseFloat(qtyStr) || 0;
+    setEditItems(prev =>
+      prev.map(item =>
+        item.product_uuid === productUuid
+          ? { ...item, quantity: val, line_total: val * item.unit_price }
+          : item
+      )
+    );
+  };
+
+  const removeItem = (productUuid: string) => {
+    setEditItems(prev => prev.filter(item => item.product_uuid !== productUuid));
   };
 
   const handleEditSubmit = async () => {
     if (!editingOrder) return;
     if (!editForm.customer_name.trim()) { toast.error("Customer name is required"); return; }
-    
+    if (editItems.length === 0) {
+      toast.error("At least one product item is required");
+      return;
+    }
+    const hasInvalidQty = editItems.some(i => i.quantity <= 0);
+    if (hasInvalidQty) {
+      toast.error("All items must have a quantity greater than 0");
+      return;
+    }
+
+    const currentSubtotal = editItems.reduce((acc, item) => acc + (item.quantity * item.unit_price), 0);
+    let currentDiscountAmount = 0;
+    const discountVal = parseFloat(editForm.discount_value) || 0;
+    if (editForm.discount_type === "percent") {
+      currentDiscountAmount = currentSubtotal * (discountVal / 100);
+    } else {
+      currentDiscountAmount = discountVal;
+    }
+    currentDiscountAmount = Math.min(currentDiscountAmount, currentSubtotal);
+
     setIsEditSubmitting(true);
     try {
       const res = await fetch(`${API_BASE_URL}/orders/${editingOrder.uuid}`, {
@@ -163,8 +280,15 @@ export default function ManageOrder() {
           customer_name: editForm.customer_name,
           phone: editForm.phone || null,
           address: editForm.address || null,
-          status: editForm.status,
           notes: editForm.notes || null,
+          discount_type: editForm.discount_type,
+          discount_value: discountVal,
+          discount_amount: currentDiscountAmount,
+          items: editItems.map(i => ({
+            product_uuid: i.product_uuid,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          })),
         }),
       });
       if (!res.ok) {
@@ -209,6 +333,7 @@ export default function ManageOrder() {
               <TableHead className="font-medium">Customer</TableHead>
               <TableHead className="font-medium">Type</TableHead>
               <TableHead className="font-medium">Status</TableHead>
+              <TableHead className="font-medium">Sold By</TableHead>
               <TableHead className="font-medium text-right">Total</TableHead>
               <TableHead className="font-medium">Date</TableHead>
               <TableHead className="text-right font-medium">Actions</TableHead>
@@ -251,6 +376,9 @@ export default function ManageOrder() {
                         {cap(order.status)}
                       </span>
                     </TableCell>
+                    <TableCell className="text-sm text-zinc-500">
+                      {order.sold_by ?? <span className="text-zinc-300">—</span>}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
                       ${order.total.toFixed(2)}
                       {order.discount_amount > 0 && (
@@ -270,6 +398,16 @@ export default function ManageOrder() {
                         </Button>
                         {!isComplete && (
                           <>
+                            {order.status === "pending" && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-8 w-8 text-zinc-400 hover:text-emerald-600"
+                                title="Approve order"
+                                onClick={(e) => handleApprove(order.uuid, e)}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost" size="icon"
                               className="h-8 w-8 text-zinc-400 hover:text-blue-600"
@@ -497,7 +635,7 @@ export default function ManageOrder() {
       {editingOrder && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeEdit} />
-          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl p-6 space-y-5 flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-start border-b pb-4">
               <div>
                 <h2 className="text-lg font-semibold">Edit Order</h2>
@@ -508,39 +646,178 @@ export default function ManageOrder() {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={editForm.status} onValueChange={v => setEditForm({ ...editForm, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="complete">Complete</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                  </SelectContent>
-                </Select>
+            {isEditLoading ? (
+              <div className="text-center py-10 italic text-zinc-400">Loading order items...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto flex-1 pr-1">
+                {/* Left Column: General details and discount */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Customer Info</h3>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-cust-name">Customer Name</Label>
+                    <Input id="edit-cust-name" value={editForm.customer_name} onChange={e => setEditForm({ ...editForm, customer_name: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Input id="edit-phone" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-address">Address</Label>
+                    <Input id="edit-address" value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edit-notes">Notes</Label>
+                    <Input id="edit-notes" value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
+                  </div>
+
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide pt-2">Discount</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="edit-disc-type">Type</Label>
+                      <Select value={editForm.discount_type} onValueChange={v => setEditForm({ ...editForm, discount_type: v })}>
+                        <SelectTrigger id="edit-disc-type"><SelectValue /></SelectTrigger>
+                        <SelectContent className="z-[200]">
+                          <SelectItem value="amount">Fixed Amount ($)</SelectItem>
+                          <SelectItem value="percent">Percentage (%)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="edit-disc-val">Value</Label>
+                      <Input id="edit-disc-val" type="number" min="0" value={editForm.discount_value} onChange={e => setEditForm({ ...editForm, discount_value: e.target.value })} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Items management */}
+                <div className="space-y-4 flex flex-col h-full">
+                  <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Products & Items</h3>
+                  
+                  {/* Add Product Searchable Combobox */}
+                  <div className="space-y-1.5">
+                    <Label>Add Product</Label>
+                    <Popover open={productComboOpen} onOpenChange={setProductComboOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={productComboOpen}
+                          className="w-full justify-between font-normal text-zinc-500"
+                        >
+                          Select product to add...
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 z-[200]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search products..." />
+                          <CommandList>
+                            <CommandEmpty>No products found.</CommandEmpty>
+                            <CommandGroup>
+                              {products.map(p => (
+                                <CommandItem
+                                  key={p.uuid}
+                                  value={p.name}
+                                  onSelect={() => {
+                                    addProductToOrder(p.uuid);
+                                    setProductComboOpen(false);
+                                  }}
+                                >
+                                  <span className="flex-1">{p.name}</span>
+                                  <span className="text-zinc-400 text-xs tabular-nums">${(p.price || 0).toFixed(2)}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="border rounded-lg overflow-hidden flex-1 flex flex-col min-h-[200px]">
+                    <div className="overflow-y-auto flex-1 max-h-[240px]">
+                      <table className="w-full text-sm">
+                        <thead className="bg-zinc-50 text-zinc-500 text-xs sticky top-0 border-b">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium">Product</th>
+                            <th className="text-center px-3 py-2 font-medium">Qty</th>
+                            <th className="text-right px-3 py-2 font-medium">Subtotal</th>
+                            <th className="text-right px-3 py-2 font-medium"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {editItems.map(item => (
+                            <tr key={item.product_uuid}>
+                              <td className="px-3 py-2 font-medium max-w-[120px] truncate">{item.product_name}</td>
+                              <td className="px-3 py-2 text-center">
+                                <Input
+                                  type="number"
+                                  min="0.1"
+                                  step="any"
+                                  value={item.quantity}
+                                  onChange={e => updateItemQty(item.product_uuid, e.target.value)}
+                                  className="w-16 h-8 text-center px-1"
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right text-zinc-600 tabular-nums">
+                                ${(item.quantity * item.unit_price).toFixed(2)}
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 text-zinc-400 hover:text-red-600"
+                                  onClick={() => removeItem(item.product_uuid)}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Live calculations summary */}
+                  {(() => {
+                    const subtotal = editItems.reduce((acc, item) => acc + (item.quantity * item.unit_price), 0);
+                    let discountAmt = 0;
+                    const discountVal = parseFloat(editForm.discount_value) || 0;
+                    if (editForm.discount_type === "percent") {
+                      discountAmt = subtotal * (discountVal / 100);
+                    } else {
+                      discountAmt = discountVal;
+                    }
+                    discountAmt = Math.min(discountAmt, subtotal);
+                    const total = Math.max(subtotal - discountAmt, 0);
+
+                    return (
+                      <div className="border rounded-lg p-3 space-y-1.5 text-xs bg-zinc-50/50">
+                        <div className="flex justify-between text-zinc-500">
+                          <span>Subtotal</span>
+                          <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                        </div>
+                        {discountAmt > 0 && (
+                          <div className="flex justify-between text-emerald-600">
+                            <span>Discount ({editForm.discount_type === "percent" ? `${discountVal}%` : `$${discountVal}`})</span>
+                            <span className="tabular-nums">−${discountAmt.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-semibold text-sm border-t pt-1.5 mt-1">
+                          <span>Calculated Total</span>
+                          <span className="tabular-nums">${total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Customer Name</Label>
-                <Input value={editForm.customer_name} onChange={e => setEditForm({ ...editForm, customer_name: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Address</Label>
-                <Input value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Notes</Label>
-                <Input value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} />
-              </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4 border-t mt-6">
               <Button variant="ghost" onClick={closeEdit} disabled={isEditSubmitting}>Cancel</Button>
-              <Button onClick={handleEditSubmit} disabled={isEditSubmitting}>
+              <Button onClick={handleEditSubmit} disabled={isEditSubmitting || isEditLoading}>
                 {isEditSubmitting ? "Saving…" : "Save Changes"}
               </Button>
             </div>

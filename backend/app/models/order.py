@@ -56,6 +56,7 @@ class Order(db.Model):
     total = db.Column(db.Float, nullable=False, default=0.0)
 
     notes = db.Column(db.Text, nullable=True)
+    sold_by = db.Column(db.String(80), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

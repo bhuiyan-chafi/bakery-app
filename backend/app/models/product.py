@@ -58,10 +58,6 @@ class RecipeIngredient(db.Model):
         return f'<RecipeIngredient {self.inventory_uuid} x{self.quantity}>'
 
 
-class YieldType(Enum):
-    SINGLE = "single"
-    BATCH = "batch"
-
 
 class ProductionStatus(Enum):
     PENDING = "pending"
@@ -75,8 +71,8 @@ class Production(db.Model):
     uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
     recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=False)
-    yield_type = db.Column(db.Enum(YieldType, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
-    batch_quantity = db.Column(db.Float, nullable=True)
+    batch_quantity = db.Column(db.Float, nullable=False, default=1.0)
+    damaged_quantity = db.Column(db.Float, nullable=False, default=0.0)
     status = db.Column(db.Enum(ProductionStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=ProductionStatus.PENDING)
     produced_at = db.Column(db.DateTime, nullable=True)  # set only when status → completed
     notes = db.Column(db.Text, nullable=True)

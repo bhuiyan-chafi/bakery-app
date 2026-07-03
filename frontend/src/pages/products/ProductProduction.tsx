@@ -33,8 +33,8 @@ interface ProductionRecord {
   uuid: string;
   recipe_uuid: string;
   recipe_name: string;
-  yield_type: string;
-  batch_quantity: number | null;
+  batch_quantity: number;
+  damaged_quantity: number;
   status: "pending" | "running" | "completed";
   produced_at: string | null;
   notes: string | null;
@@ -61,9 +61,11 @@ export default function ProductProduction() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  // State for damaged items input
+  const [damagedInputs, setDamagedInputs] = useState<Record<string, string>>({});
+
   // Form state
   const [selectedRecipeUuid, setSelectedRecipeUuid] = useState("");
-  const [yieldType, setYieldType] = useState("single");
   const [batchQuantity, setBatchQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [shortfalls, setShortfalls] = useState<{
@@ -73,8 +75,6 @@ export default function ProductProduction() {
     available: number;
     shortfall: number;
   }[]>([]);
-
-  useEffect(() => { fetchAll(); }, [productUuid]);
 
   const fetchAll = async () => {
     setIsLoading(true);
@@ -105,9 +105,10 @@ export default function ProductProduction() {
     }
   };
 
+  useEffect(() => { fetchAll(); }, [productUuid]);
+
   const resetForm = () => {
     setSelectedRecipeUuid(recipes[0]?.uuid || "");
-    setYieldType("single");
     setBatchQuantity("1");
     setNotes("");
   };
@@ -115,7 +116,7 @@ export default function ProductProduction() {
   const handleRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRecipeUuid) { toast.error("Please select a recipe"); return; }
-    if (yieldType === "batch" && (!batchQuantity || parseFloat(batchQuantity) <= 0)) {
+    if (!batchQuantity || parseFloat(batchQuantity) <= 0) {
       toast.error("Batch quantity must be greater than zero"); return;
     }
 
@@ -127,8 +128,7 @@ export default function ProductProduction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipe_uuid: selectedRecipeUuid,
-          yield_type: yieldType,
-          batch_quantity: yieldType === "batch" ? parseFloat(batchQuantity) : null,
+          batch_quantity: parseFloat(batchQuantity),
           notes: notes || null,
         }),
       });
@@ -159,12 +159,27 @@ export default function ProductProduction() {
     const next = nextStatus[prod.status];
     if (!next) return;
     try {
+      const payload: Record<string, any> = { status: next };
+      if (next === "completed") {
+        const damagedVal = damagedInputs[prod.uuid] || "0";
+        const parsed = parseFloat(damagedVal);
+        if (isNaN(parsed) || parsed < 0) {
+          toast.error("Please enter a valid non-negative number for damaged items");
+          return;
+        }
+        if (parsed > prod.batch_quantity) {
+          toast.error(`Damaged quantity cannot exceed batch quantity (${prod.batch_quantity})`);
+          return;
+        }
+        payload.damaged_quantity = parsed;
+      }
+
       const res = await fetch(
         `${API_BASE_URL}/products/${productUuid}/production/${prod.uuid}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: next }),
+          body: JSON.stringify(payload),
         }
       );
       if (!res.ok) {
@@ -172,6 +187,12 @@ export default function ProductProduction() {
         throw new Error(data.error || "Failed to update status");
       }
       toast.success(`Status updated to "${next}"`);
+      // Clear input state for this production run
+      setDamagedInputs((prev) => {
+        const nextState = { ...prev };
+        delete nextState[prod.uuid];
+        return nextState;
+      });
       fetchAll();
     } catch (error: any) {
       toast.error(error.message);
@@ -228,7 +249,7 @@ export default function ProductProduction() {
       <div className="bg-white border rounded-md p-6 space-y-5">
         <h2 className="text-base font-semibold">Start New Production</h2>
         <form onSubmit={handleRecord} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
             {/* Recipe */}
             <div className="space-y-2">
               <Label>Recipe <span className="text-red-500">*</span></Label>
@@ -253,28 +274,10 @@ export default function ProductProduction() {
               )}
             </div>
 
-            {/* Yield type */}
+            {/* Batch quantity */}
             <div className="space-y-2">
-              <Label>Yield Type <span className="text-red-500">*</span></Label>
-              <Select
-                value={yieldType}
-                onValueChange={(val) => { setYieldType(val); if (val === "single") setBatchQuantity("1"); }}
-                disabled={isSaving}
-              >
-                <SelectTrigger className="bg-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">Single — one unit</SelectItem>
-                  <SelectItem value="batch">Batch — multiple units</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Batch quantity — stays in col 3, hidden when single */}
-            <div className="space-y-2">
-              <Label htmlFor="batch-qty" className={yieldType !== "batch" ? "text-zinc-400" : ""}>
-                Batch Quantity {yieldType === "batch" && <span className="text-red-500">*</span>}
+              <Label htmlFor="batch-qty">
+                Batch Quantity <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="batch-qty"
@@ -284,8 +287,7 @@ export default function ProductProduction() {
                 placeholder="e.g. 12"
                 value={batchQuantity}
                 onChange={(e) => setBatchQuantity(e.target.value)}
-                disabled={isSaving || yieldType !== "batch"}
-                className={yieldType !== "batch" ? "opacity-40 cursor-not-allowed" : ""}
+                disabled={isSaving}
               />
             </div>
           </div>
@@ -356,8 +358,8 @@ export default function ProductProduction() {
             <TableHeader>
               <TableRow className="bg-zinc-50/50">
                 <TableHead className="font-medium">Recipe</TableHead>
-                <TableHead className="font-medium">Yield</TableHead>
                 <TableHead className="font-medium">Batch Qty</TableHead>
+                <TableHead className="font-medium">Damaged Qty</TableHead>
                 <TableHead className="font-medium">Status</TableHead>
                 <TableHead className="font-medium">Completed At</TableHead>
                 <TableHead className="font-medium">Notes</TableHead>
@@ -380,10 +382,24 @@ export default function ProductProduction() {
                   return (
                     <TableRow key={p.uuid} className="hover:bg-zinc-50/50 transition-colors">
                       <TableCell className="font-medium">{p.recipe_name}</TableCell>
-                      <TableCell>
-                        <span className="capitalize text-zinc-600 text-sm">{p.yield_type}</span>
-                      </TableCell>
                       <TableCell className="text-zinc-500">{p.batch_quantity ?? "—"}</TableCell>
+                      <TableCell>
+                        {p.status === "running" ? (
+                          <Input
+                            type="number"
+                            min="0"
+                            max={p.batch_quantity}
+                            step="any"
+                            value={damagedInputs[p.uuid] ?? "0"}
+                            onChange={(e) => setDamagedInputs({ ...damagedInputs, [p.uuid]: e.target.value })}
+                            className="h-8 w-20 px-2 py-1 text-sm bg-white"
+                          />
+                        ) : p.status === "completed" ? (
+                          <span className="text-zinc-600">{p.damaged_quantity}</span>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium", cfg.color)}>
                           <StatusIcon status={p.status} />

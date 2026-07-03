@@ -1,0 +1,117 @@
+# Previous work
+
+To understand the what developments were done before this point, please read these two documents. For the backend please read this [document](./backend/bakery_app_knowledge_brain.md) and for [frontend](./frontend/bakery_app_frontend_brain.md).
+
+## Current Developments
+
+### Adding damaged product quantity in Production
+
+Now I want to break the flow of the production feature to add damage quantity. Right now we are selecting the quantity and doing a production. But in a production it not sure that all the products will turn out to be good. So what can we do? We can make the production and then before the production is complete we can put the damanaged items and then click complete.
+
+#### Idea
+- the backend and front is already adjusted with the removal of "yield_type"
+- we can add another column "damaged_quantity" in @product.py under Production class.
+- set the default value `damaged_quantity=0` in the frontend in @ProducProduction.tsx
+- then when we click on start production on the webui the column for "Damaged Items" should enable the input filed set default as 0.
+- then clicking the "complete" button will store this value under "damaged_quantity" and send `batch_quantity-damaged_quantity` to the product inventory. 
+- but the inventory for the raw material will be reduced based on "batch_quantity".
+
+### Adding `Active Productions` summary in Dashboard
+
+If we see in @DashboardPage.tsx file, the first item is "Total Revenue" which is a static item. We are going to bring real data here. The first block will show the number of active Production going on. 
+
+#### Idea
+- the runnings productions are those whose `status` is running.
+- since productions are alwas monitored, it is not important to set a timeframe. We can simply query the table and fetch all items with status=running. 
+
+
+### Adding `Complete Orders, Pending Orders` in the next block
+
+In next two block we will bring the summary of Complete Orders from last 7 days.
+
+#### Idea
+
+- set a time range including today to last 6 days, 7 days in total
+- get the orders that has status as "complete" and "pending"
+- display the "complete" orders number in the first block and then "pending" in the second
+- so the final order of blocks will be Active Production > Completed Orders > Pending Orders
+- but remember to mention that the Order data is of last 7 days
+
+### Adding `Total Sale` 
+
+In the next block we are going to add the total sale of last 7 days. The idea is to get the complete sale amount from last 7 days including today. 
+
+#### Idea
+- in the @order.py model we will sum up the `total` column of the last 7 days entry and then display the value.
+
+### Fixing the `Manage Orders`
+
+Right now if we go to manage orders, can see all the orders there. For orders which are complete it is okay. But for orders which are pending we need some additional features. Under Action column we a need a direct approval button which is set the status to complete. Right now the edit button doesn't do much. But by edit it means I should be able to edit general information plus modification of products. 
+
+#### Idea
+
+- under the Actions column in @Manageorder.tsx, put a approve button that will complete the order. Check if there is a route already in @order.py.
+- then when we click the edit button, remove the option to edit the status of the order. Because once it is approved then we have already added the balance, in that case reversing it will affect so many places.
+- but add the items table so that, items can be added or removed with the existing one.
+
+### Adding the "Accounts" feature on the sidebar
+
+Now we are going to add the accounts feature on the sidebar. This will involve both frontend and backend parts. Lets start with the frontend part first. 
+
+#### Idea: front pages
+- on the left sidebar @Sidebar.tsx add an option "Accounts" right after "Order" option. 
+- clicking on that feature will take us to the Accounts page.
+- on that page: on the top right side we need another page connection as "Miscellaneous"
+
+#### Idea : Accounts Page
+
+- create a search panel where I can select a date range and then type and a button to search
+- for the type I want: income, expense, profit 3 options
+
+#### Idea: Miscellaneous Feature
+
+- a inline form with 3 field: Transaction Type(income/expense as options), Transcation On (an open field to write a small note but not more than 15 characters), Transaction Amount (should support fractional value too), Transaction Date (a calender).
+- for the backend, create a new model MiscellaneousTransactions and store these data
+- create necessary backend and frontend routes
+
+#### Idea: total expense in Accounts page
+- using the date range and type expense must produce these results and display them in a table below in @AccountsPage.tsx
+- all transactions in `inventory_transactions` where the type is `IN`
+- all transactions in `miscellaneous_transactions` where the type is `expense`
+
+#### Idea: total income in Accounts page
+- if the type is income then all transactions in `miscellaneous_transactions` where the type is `income`
+- all of the orders within that range where the status is complete in `orders` table. For the amount take the total column in consideration. 
+
+#### Idea: total profit
+
+- try to use previous two computations and calculate the balance. 
+- in the table show both expenses and incomes
+
+### Revenue block in Dashboard
+
+So now we can add the revenue on the dashboard. 
+
+#### Plan
+
+- in another small block calculate the revenue for last 7 days and show the balance with same coloring choice
+
+### Restrict Access for the users 
+
+Now we are going to put some restrictions on the feature access by users. Till now all the features that we have done are for ADMIN and MANAGER ROLES. 
+
+#### Idea: Role based restrictions
+
+- in the @Sidebar.tsx put a condition that checks the user role and if its ADMIN or MANAGER then they can see all these features. 
+
+### Separate sales page for users with role "NORMAL"
+
+On the @Sidebar.tsx create another option "Order" and then put some simple feature there. This feature will be usable only for role with NORMAL.
+
+#### Idea
+- a name field where the current username will be set automatically and readonly.
+- then customer and phone number field make mandatory
+- order type: Delivery only
+- status pending or complete
+- then the items selection part just like @OrderPage.tsx
+- in the orders table we have to add another column "sold_by" and adjust with the main @OrderPage.tsx page sale too.

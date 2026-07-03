@@ -33,6 +33,7 @@ def _serialize_order(order, include_items=False):
         "subtotal": order.subtotal,
         "total": order.total,
         "notes": order.notes,
+        "sold_by": order.sold_by,
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }
@@ -93,8 +94,16 @@ def create_order():
     except ValueError:
         return jsonify({"error": f"Invalid order_type. Must be one of: {[e.value for e in OrderType]}"}), 400
 
-    # Derive status from order type (frontend rule, enforced here too)
-    status = OrderStatus.COMPLETE if order_type == OrderType.SHOP else OrderStatus.PENDING
+    # Accept explicit status for delivery orders (e.g. from sales page)
+    raw_status = data.get('status')
+    if raw_status:
+        try:
+            status = OrderStatus(raw_status)
+        except ValueError:
+            return jsonify({"error": f"Invalid status. Must be one of: {[e.value for e in OrderStatus]}"}), 400
+    else:
+        # Derive status from order type (default rule)
+        status = OrderStatus.COMPLETE if order_type == OrderType.SHOP else OrderStatus.PENDING
 
     # Validate discount type
     raw_discount_type = data.get('discount_type', 'amount')
@@ -144,6 +153,7 @@ def create_order():
         subtotal=subtotal,
         total=total,
         notes=data.get('notes'),
+        sold_by=data.get('sold_by'),
         items=order_items,
     )
 
@@ -155,7 +165,8 @@ def create_order():
 # ── PUT /orders/<uuid> ────────────────────────────────────────────────────────
 @order_bp.route('/<order_uuid>', methods=['PUT'])
 def update_order(order_uuid):
-    from app.models.order import Order, OrderStatus
+    from app.models.order import Order, OrderStatus, OrderItem, DiscountType
+    from app.models.product import Product
 
     order = Order.query.get_or_404(order_uuid)
 
@@ -178,6 +189,79 @@ def update_order(order_uuid):
         except ValueError:
             return jsonify({"error": f"Invalid status. Must be one of: {[e.value for e in OrderStatus]}"}), 400
 
+    if 'discount_type' in data:
+        try:
+            order.discount_type = DiscountType(data['discount_type'])
+        except ValueError:
+            return jsonify({"error": f"Invalid discount_type. Must be one of: {[e.value for e in DiscountType]}"}), 400
+
+    if 'discount_value' in data:
+        order.discount_value = float(data['discount_value'])
+
+    if 'discount_amount' in data:
+        order.discount_amount = round(float(data['discount_amount']), 4)
+
+    # Handle items update
+    if 'items' in data:
+        items_data = data['items']
+        if not items_data:
+            return jsonify({"error": "At least one item is required"}), 400
+
+        # Remove old items
+        for item in order.items:
+            db.session.delete(item)
+        
+        # Build new items
+        order_items = []
+        for idx, item in enumerate(items_data):
+            product_uuid = item.get('product_uuid')
+            quantity = item.get('quantity')
+            unit_price = item.get('unit_price')
+
+            if not product_uuid:
+                return jsonify({"error": f"Item {idx+1}: product_uuid is required"}), 400
+            if not Product.query.get(product_uuid):
+                return jsonify({"error": f"Item {idx+1}: product not found"}), 404
+            if not quantity or float(quantity) <= 0:
+                return jsonify({"error": f"Item {idx+1}: quantity must be greater than 0"}), 400
+
+            qty = float(quantity)
+            price = float(unit_price) if unit_price is not None else 0.0
+            order_items.append(OrderItem(
+                product_uuid=product_uuid,
+                quantity=qty,
+                unit_price=price,
+                line_total=round(qty * price, 4),
+            ))
+
+        order.items = order_items
+        order.subtotal = round(sum(i.line_total for i in order_items), 4)
+        
+        # Re-resolve total
+        discount_amt = order.discount_amount
+        if 'discount_amount' in data:
+            discount_amt = round(float(data['discount_amount']), 4)
+        elif order.discount_type == DiscountType.PERCENT:
+            discount_amt = round(order.subtotal * (order.discount_value / 100.0), 4)
+        else:
+            discount_amt = round(order.discount_value, 4)
+        
+        order.discount_amount = discount_amt
+        order.total = round(max(order.subtotal - discount_amt, 0), 4)
+    else:
+        # If items are not provided but discount parameters are updated, recalculate total
+        if 'discount_value' in data or 'discount_type' in data or 'discount_amount' in data:
+            discount_amt = order.discount_amount
+            if 'discount_amount' in data:
+                discount_amt = round(float(data['discount_amount']), 4)
+            elif order.discount_type == DiscountType.PERCENT:
+                discount_amt = round(order.subtotal * (order.discount_value / 100.0), 4)
+            else:
+                discount_amt = round(order.discount_value, 4)
+            
+            order.discount_amount = discount_amt
+            order.total = round(max(order.subtotal - discount_amt, 0), 4)
+
     order.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"message": "Order updated"}), 200
@@ -196,3 +280,36 @@ def delete_order(order_uuid):
     db.session.delete(order)
     db.session.commit()
     return jsonify({"message": "Order deleted"}), 200
+
+
+@order_bp.route('/stats/7days', methods=['GET'])
+def get_orders_stats_7days():
+    from app.models.order import Order, OrderStatus
+    from datetime import datetime, timedelta
+
+    now = datetime.utcnow()
+    # Today's date starting at 00:00:00 UTC minus 6 days is exactly 7 days including today.
+    today_start = datetime(now.year, now.month, now.day)
+    start_date = today_start - timedelta(days=6)
+
+    completed_count = Order.query.filter(
+        Order.status == OrderStatus.COMPLETE,
+        Order.created_at >= start_date
+    ).count()
+
+    pending_count = Order.query.filter(
+        Order.status == OrderStatus.PENDING,
+        Order.created_at >= start_date
+    ).count()
+
+    total_sales = db.session.query(db.func.sum(Order.total)).filter(
+        Order.status == OrderStatus.COMPLETE,
+        Order.created_at >= start_date
+    ).scalar() or 0.0
+
+    return jsonify({
+        "completed_count": completed_count,
+        "pending_count": pending_count,
+        "total_sales": total_sales,
+        "start_date": start_date.isoformat()
+    }), 200

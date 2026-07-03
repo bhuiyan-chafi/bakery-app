@@ -26,6 +26,8 @@ def create_app():
     from app.routes.inventory import inventory_bp
     from app.routes.order import order_bp
     from app.routes.user import user_bp
+    from app.routes.miscellaneous import miscellaneous_bp
+    from app.routes.accounts import accounts_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
@@ -33,9 +35,11 @@ def create_app():
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
     app.register_blueprint(order_bp, url_prefix='/api/orders')
+    app.register_blueprint(miscellaneous_bp, url_prefix='/api/miscellaneous')
+    app.register_blueprint(accounts_bp, url_prefix='/api/accounts')
 
     # Import all models so Alembic can detect them for migrations
-    from app.models import user, product, settings, inventory, order  # noqa: F401
+    from app.models import user, product, settings, inventory, order, miscellaneous  # noqa: F401
 
     
     # Register CLI commands
