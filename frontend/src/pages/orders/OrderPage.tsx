@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Trash2, ShoppingCart, ClipboardList, Tag, Percent, ChevronsUpDown } from "lucide-react";
+import { Plus, Trash2, ShoppingCart, ClipboardList, Tag, Percent, ChevronsUpDown, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,11 @@ interface Product {
   name: string;
   price: number;
   current_stock: number;
+}
+
+interface Salesman {
+  uuid: string;
+  username: string;
 }
 
 interface OrderLine {
@@ -49,12 +54,14 @@ export default function OrderPage() {
   const username = currentUser?.username ?? null;
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [salesmen, setSalesmen] = useState<Salesman[]>([]);
 
   // Customer / order meta
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [orderType, setOrderType] = useState<OrderType>("shop");
+  const [assignedTo, setAssignedTo] = useState("");
   const [notes, setNotes] = useState("");
 
   // POS lines
@@ -84,7 +91,17 @@ export default function OrderPage() {
     }
   }, []);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  const fetchSalesmen = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/salesmen`);
+      if (!res.ok) throw new Error("Failed to load salesmen");
+      setSalesmen(await res.json());
+    } catch {
+      // non-critical, silently fail
+    }
+  }, []);
+
+  useEffect(() => { fetchProducts(); fetchSalesmen(); }, [fetchProducts, fetchSalesmen]);
 
   // ── Line helpers ────────────────────────────────────────────────
   const addLine = () => {
@@ -164,6 +181,7 @@ export default function OrderPage() {
     setPhone("");
     setAddress("");
     setOrderType("shop");
+    setAssignedTo("");
     setNotes("");
     setDiscountValue("");
     setDiscountMode("amount");
@@ -187,6 +205,7 @@ export default function OrderPage() {
         status: derivedStatus,
         notes: notes.trim() || null,
         sold_by: username,
+        assigned_to: orderType === "delivery" ? (assignedTo || null) : null,
         discount_type: discountMode,
         discount_value: parseFloat(discountValue) || 0,
         subtotal,
@@ -257,7 +276,7 @@ export default function OrderPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Order Type</Label>
-                <Select value={orderType} onValueChange={v => setOrderType(v as OrderType)}>
+                <Select value={orderType} onValueChange={v => { setOrderType(v as OrderType); setAssignedTo(""); }}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="shop">Shop (walk-in)</SelectItem>
@@ -273,6 +292,29 @@ export default function OrderPage() {
                   <span className="ml-2 text-xs opacity-60">(auto-set)</span>
                 </div>
               </div>
+              {/* Delivery person — only shown when order type is Delivery */}
+              {orderType === "delivery" && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label className="flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-zinc-400" />
+                    Assign Delivery Person
+                  </Label>
+                  <Select value={assignedTo} onValueChange={setAssignedTo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={salesmen.length === 0 ? "No salesmen available" : "Select a person…"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— Unassigned —</SelectItem>
+                      {salesmen.map(s => (
+                        <SelectItem key={s.uuid} value={s.username}>{s.username}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {salesmen.length === 0 && (
+                    <p className="text-xs text-amber-600">No active salesmen found. Add a user with the NORMAL role.</p>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="order-notes">Notes</Label>
                 <Input id="order-notes" placeholder="Any special instructions..." value={notes} onChange={e => setNotes(e.target.value)} />

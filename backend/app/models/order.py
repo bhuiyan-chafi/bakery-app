@@ -38,6 +38,7 @@ class Order(db.Model):
         nullable=False,
         default=OrderType.SHOP,
     )
+    assigned_to = db.Column(db.String(80), nullable=True)  # username of the delivery person
     status = db.Column(
         db.Enum(OrderStatus, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,

@@ -34,6 +34,7 @@ def _serialize_order(order, include_items=False):
         "total": order.total,
         "notes": order.notes,
         "sold_by": order.sold_by,
+        "assigned_to": order.assigned_to,
         "created_at": order.created_at.isoformat(),
         "updated_at": order.updated_at.isoformat(),
     }
@@ -146,6 +147,7 @@ def create_order():
         phone=data.get('phone'),
         address=data.get('address'),
         order_type=order_type,
+        assigned_to=data.get('assigned_to'),
         status=status,
         discount_type=discount_type,
         discount_value=discount_value,
@@ -183,6 +185,8 @@ def update_order(order_uuid):
         order.address = data['address']
     if 'notes' in data:
         order.notes = data['notes']
+    if 'assigned_to' in data:
+        order.assigned_to = data['assigned_to'] or None
     if 'status' in data:
         try:
             order.status = OrderStatus(data['status'])
@@ -313,3 +317,39 @@ def get_orders_stats_7days():
         "total_sales": total_sales,
         "start_date": start_date.isoformat()
     }), 200
+
+
+# ── GET /orders/my-deliveries ────────────────────────────────────────────────
+@order_bp.route('/my-deliveries', methods=['GET'], strict_slashes=False)
+def get_my_deliveries():
+    """Return delivery orders assigned to the given username, with items."""
+    from app.models.order import Order, OrderType
+    username = request.args.get('username', '').strip()
+    if not username:
+        return jsonify({"error": "username query param is required"}), 400
+
+    orders = Order.query.filter_by(
+        assigned_to=username,
+        order_type=OrderType.DELIVERY,
+    ).order_by(Order.created_at.desc()).all()
+
+    return jsonify([_serialize_order(o, include_items=True) for o in orders]), 200
+
+
+# ── GET /orders/salesmen ─────────────────────────────────────────────────────
+@order_bp.route('/salesmen', methods=['GET'], strict_slashes=False)
+def get_salesmen():
+    """Return all NORMAL + APPROVED users available as delivery persons."""
+    from app.models.user import User, UserRole, UserStatus
+    salesmen = User.query.filter_by(
+        role=UserRole.NORMAL,
+        status=UserStatus.APPROVED
+    ).all()
+    return jsonify([
+        {
+            "uuid": u.uuid,
+            "username": u.username,
+            "name": u.details.name if u.details and u.details.name else u.username,
+        }
+        for u in salesmen
+    ]), 200

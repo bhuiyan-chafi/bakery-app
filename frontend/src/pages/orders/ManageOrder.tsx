@@ -30,6 +30,7 @@ interface Order {
   total: number;
   notes: string | null;
   sold_by: string | null;
+  assigned_to: string | null;
   created_at: string;
 }
 
@@ -87,6 +88,21 @@ export default function ManageOrder() {
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [isEditSubmitting, setIsEditSubmitting] = useState(false);
   const [productComboOpen, setProductComboOpen] = useState(false);
+  // username → full name map for display
+  const [usernameToName, setUsernameToName] = useState<Record<string, string>>({});
+
+  const fetchSalesmen = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/salesmen`);
+      if (!res.ok) return;
+      const data: { uuid: string; username: string; name: string }[] = await res.json();
+      const map: Record<string, string> = {};
+      data.forEach(s => { map[s.username] = s.name; });
+      setUsernameToName(map);
+    } catch {
+      // non-critical
+    }
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -116,7 +132,8 @@ export default function ManageOrder() {
   useEffect(() => {
     fetchOrders();
     fetchProducts();
-  }, [fetchOrders, fetchProducts]);
+    fetchSalesmen();
+  }, [fetchOrders, fetchProducts, fetchSalesmen]);
 
   const openDetail = async (uuid: string) => {
     setIsDetailLoading(true);
@@ -334,6 +351,7 @@ export default function ManageOrder() {
               <TableHead className="font-medium">Type</TableHead>
               <TableHead className="font-medium">Status</TableHead>
               <TableHead className="font-medium">Sold By</TableHead>
+              <TableHead className="font-medium">Assigned To</TableHead>
               <TableHead className="font-medium text-right">Total</TableHead>
               <TableHead className="font-medium">Date</TableHead>
               <TableHead className="text-right font-medium">Actions</TableHead>
@@ -378,6 +396,13 @@ export default function ManageOrder() {
                     </TableCell>
                     <TableCell className="text-sm text-zinc-500">
                       {order.sold_by ?? <span className="text-zinc-300">—</span>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {order.assigned_to ? (
+                        <span className="text-sm text-zinc-700 font-medium">
+                          {usernameToName[order.assigned_to] ?? order.assigned_to}
+                        </span>
+                      ) : <span className="text-zinc-300">—</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
                       ${order.total.toFixed(2)}
