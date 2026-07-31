@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from app.models.settings import UnitMeasurement
 from app.extensions import db
 
@@ -110,4 +111,106 @@ def delete_permission(uuid):
     db.session.delete(permission)
     db.session.commit()
     return jsonify({"message": "Permission deleted successfully"}), 200
+
+# --- Database Backup ---
+
+@settings_bp.route('/backup/download', methods=['GET'])
+@jwt_required()
+def download_backup():
+    import os
+    import subprocess
+    from datetime import datetime
+    from flask import send_file
+    from flask_jwt_extended import get_jwt_identity
+    from app.models.user import User, UserRole
+
+    # Verify admin role
+    current_user_uuid = get_jwt_identity()
+    user = User.query.get(current_user_uuid)
+    if not user or user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can download backups"}), 403
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"db_backup_{timestamp}.sql.gz"
+    filepath = os.path.join("/tmp", filename)
+    
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        return jsonify({"error": "DATABASE_URL not set"}), 500
+
+    bash_cmd = f"pg_dump '{database_url}' | gzip > {filepath}"
+    
+    try:
+        subprocess.run(bash_cmd, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Failed to generate backup: {e}"}), 500
+        
+    return send_file(filepath, as_attachment=True, download_name=filename)
+
+
+@settings_bp.route('/backup/upload', methods=['POST'])
+@jwt_required()
+def upload_backup():
+    import os
+    import subprocess
+    from flask import request
+    from flask_jwt_extended import get_jwt_identity
+    from app.models.user import User, UserRole
+
+    # Verify admin role
+    current_user_uuid = get_jwt_identity()
+    user = User.query.get(current_user_uuid)
+    if not user or user.role != UserRole.ADMIN:
+        return jsonify({"error": "Only admins can restore backups"}), 403
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Empty filename"}), 400
+
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        return jsonify({"error": "DATABASE_URL not set"}), 500
+
+    # Save uploaded file
+    filepath = os.path.join("/tmp", "restore_upload.sql.gz")
+    file.save(filepath)
+
+    try:
+        from app.extensions import db
+        from sqlalchemy import text
+        
+        # Clear any pending transaction to release locks on our own connection
+        db.session.rollback()
+
+        # Force disconnect all OTHER sessions using the active SQLAlchemy connection.
+        # This preserves our current connection so Flask can return the HTTP response cleanly.
+        db.session.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"))
+        db.session.commit()
+
+        # Dispose the engine pool so SQLAlchemy doesn't try to reuse the idle connections we just killed
+        db.engine.dispose()
+        
+        # First, drop and recreate the public schema to ensure a clean slate
+        # This prevents duplicate key errors when restoring over existing data
+        clean_cmd = f'psql "{database_url}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
+        subprocess.run(clean_cmd, shell=True, check=True)
+        
+        # Then, restore the backup
+        # zcat -f safely handles BOTH gzipped (.sql.gz) and plain (.sql) files
+        restore_cmd = f'zcat -f "{filepath}" | psql "{database_url}"'
+        subprocess.run(restore_cmd, shell=True, check=True)
+        
+    except subprocess.CalledProcessError as e:
+        return jsonify({"error": f"Database restoration failed: {e}"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            
+    return jsonify({"message": "Database restored successfully. Please log in again."}), 200
+
 

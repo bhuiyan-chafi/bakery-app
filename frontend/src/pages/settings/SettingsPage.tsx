@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Scale, Shield, Users, Pencil, Trash2 } from "lucide-react";
+import { Scale, Shield, Users, Pencil, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "@/config/constants";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,11 @@ export default function SettingsPage() {
   
   const [editUserUuid, setEditUserUuid] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Backup Upload State
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -94,25 +99,68 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight">Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your application settings and configurations.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/settings/permissions" className="flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              Permissions Management
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/settings/measurement-unit" className="flex items-center gap-2">
-              <Scale className="w-4 h-4" />
-              Measurement Units
-            </Link>
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-light tracking-tight">Settings</h1>
+        <p className="text-muted-foreground mt-1">Manage your application settings and configurations.</p>
+      </div>
+
+      <div className="bg-white rounded-xl border shadow-sm p-4 flex flex-wrap items-center gap-3">
+        <Button asChild variant="outline" size="sm" className="h-9">
+          <Link to="/settings/permissions" className="flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            Permissions Management
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm" className="h-9">
+          <Link to="/settings/measurement-unit" className="flex items-center gap-2">
+            <Scale className="w-4 h-4" />
+            Measurement Units
+          </Link>
+        </Button>
+        <div className="flex-1"></div>
+        <Button variant="outline" size="sm" className="h-9 flex items-center gap-2" onClick={() => setIsUploadModalOpen(true)}>
+          <Upload className="w-4 h-4" />
+          Upload DB Backup
+        </Button>
+        <Button variant="default" size="sm" className="h-9 flex items-center gap-2" onClick={async () => {
+          try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            
+            toast.info("Generating backup...");
+            const res = await fetch(`${API_BASE_URL}/settings/backup/download`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            
+            if (!res.ok) {
+              const data = await res.json();
+              throw new Error(data.error || "Failed to download backup");
+            }
+            
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            // We try to extract filename from content-disposition header if possible
+            const disposition = res.headers.get('content-disposition');
+            let filename = `db_backup_${new Date().getTime()}.sql.gz`;
+            if (disposition && disposition.includes('filename=')) {
+                filename = disposition.split('filename=')[1].replace(/["']/g, '');
+            }
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            toast.success("Backup downloaded successfully");
+          } catch (err: any) {
+            toast.error(err.message);
+          }
+        }}>
+          <Download className="w-4 h-4" />
+          Download DB Backup
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
@@ -212,6 +260,85 @@ export default function SettingsPage() {
               <UserPermissionsCard userId={editUserUuid} />
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Backup Modal */}
+      <Dialog open={isUploadModalOpen} onOpenChange={(open) => {
+        if (!isUploading) {
+          setIsUploadModalOpen(open);
+          setUploadFile(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Upload Database Backup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-amber-50 text-amber-800 p-3 rounded-md text-sm border border-amber-200">
+              <strong>Warning:</strong> Uploading a backup will <strong>completely overwrite</strong> the current database. All current data will be lost. You will be logged out upon success.
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1">
+                Backup File (.sql.gz)
+              </label>
+              <input
+                type="file"
+                accept=".sql.gz,.sql"
+                className="w-full text-sm text-zinc-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setUploadFile(e.target.files[0]);
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 border-t pt-4">
+            <Button variant="outline" onClick={() => setIsUploadModalOpen(false)} disabled={isUploading}>
+              Cancel
+            </Button>
+            <Button 
+              disabled={!uploadFile || isUploading}
+              onClick={async () => {
+                if (!uploadFile) return;
+                const token = localStorage.getItem('token');
+                if (!token) return;
+                
+                setIsUploading(true);
+                const formData = new FormData();
+                formData.append('file', uploadFile);
+                
+                try {
+                  const res = await fetch(`${API_BASE_URL}/settings/backup/upload`, {
+                    method: 'POST',
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData,
+                  });
+                  
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || "Failed to restore backup");
+                  
+                  toast.success(data.message || "Database restored successfully.");
+                  setIsUploadModalOpen(false);
+                  
+                  // Log out user
+                  setTimeout(() => {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/';
+                  }, 1500);
+                  
+                } catch (err: any) {
+                  toast.error(err.message);
+                } finally {
+                  setIsUploading(false);
+                }
+              }}
+            >
+              {isUploading ? "Restoring..." : "Restore Database"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -154,6 +154,13 @@ In @Sales.tsx page we have the option for a salesmen to make sales and take orde
 
 Read the file [db-backup.md](db-backup.md) to create the backup system.
 
+There will be this auto script saving the database backup. But I also want a manual system to download database backups.
+
+#### Plan
+
+- in @SettingsPage.tsx page on top right create another button "Download DB Backup"
+- clicking that button will trigger the sql backup and download a file
+
 ### User status
 
 Right now we have a bug, for example if a new user logs in the status checks for "Approved". But it should be checking for "Active".
@@ -175,3 +182,15 @@ Right now we have all the contents on the dashboard without filtering out the us
 - staff: Active Productions
 - normal: Completed Orders (completed by him only). So you have to write two queries, because the admin and manager can see the total completed orders but a normal user can see the orders that is only completed by him. Since we already have the system built in @MyDeliveriesPage.tsx, you make a plan from there.
 - I would suggest you create a separate row in the @Dashboard.tsx dedicated to the user type Normal so that we can add future contents dedicated to them there.
+
+### Upload Backup
+
+Now that we can download backup files from the settings, its time to add the option to upload the database backup.
+
+#### Plan
+
+- create another button beside download as Upload DB Backup
+- on click bring a modal where I can upload the sql file
+- on upload it should initiate the restoration
+- once complete close all the session and logout the user to log back in
+- if there is an error then show a message and keep the current state

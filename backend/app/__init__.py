@@ -63,7 +63,7 @@ def create_app():
         admin = User(
             username=admin_username,
             role=UserRole.ADMIN,
-            status=UserStatus.APPROVED
+            status=UserStatus.ACTIVE
         )
         admin.set_password(admin_password)
 
