@@ -64,7 +64,8 @@ def login():
     if not user or not user.check_password(password):
         return jsonify({"error": "Invalid username or password"}), 401
 
-    if user.status != UserStatus.APPROVED:
+    ALLOWED_STATUSES = {UserStatus.APPROVED, UserStatus.ACTIVE}
+    if user.status not in ALLOWED_STATUSES:
         return jsonify({"error": f"Account is {user.status.value}. Please contact support."}), 403
 
     # Update last login

@@ -149,3 +149,29 @@ In @Sales.tsx page we have the option for a salesmen to make sales and take orde
 - on Orders page list the order that is assigned to that salesmen
 - add details: customer name, address, phone, and under action column: check button that updates the order to delivered
 - under action column: view button that will list the order item details: name, quantitiy, special note, etc.
+
+### Backup
+
+Read the file [db-backup.md](db-backup.md) to create the backup system.
+
+### User status
+
+Right now we have a bug, for example if a new user logs in the status checks for "Approved". But it should be checking for "Active".
+
+#### Plan
+
+After login:
+
+- if the status is "Approved" then the user can login and can see personal profile only
+- if the status is "Active" only then the user can see expected functionalities
+
+### Dashboard Content
+
+Right now we have all the contents on the dashboard without filtering out the user type.
+
+#### Plan
+
+- admin, manager: can see everything
+- staff: Active Productions
+- normal: Completed Orders (completed by him only). So you have to write two queries, because the admin and manager can see the total completed orders but a normal user can see the orders that is only completed by him. Since we already have the system built in @MyDeliveriesPage.tsx, you make a plan from there.
+- I would suggest you create a separate row in the @Dashboard.tsx dedicated to the user type Normal so that we can add future contents dedicated to them there.

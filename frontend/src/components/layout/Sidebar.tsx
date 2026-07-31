@@ -29,10 +29,15 @@ export function Sidebar({ mobileOpen, onClose, collapsed, onToggleCollapse }: Si
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
   const role = user?.role?.toUpperCase();
-  const isPrivileged = role === "ADMIN" || role === "MANAGER";
-  const isNormal = role === "NORMAL";
+  const status = user?.status?.toUpperCase();
+  const isActive = status === "ACTIVE";           // full access
+  const isApprovedOnly = status === "APPROVED";   // profile/dashboard only
+  const isPrivileged = isActive && (role === "ADMIN" || role === "MANAGER");
+  const isNormal = isActive && role === "NORMAL";
 
   const visibleMenuItems = menuItems.filter(item => {
+    // Approved-only users: only see Dashboard (unrestricted, non-normalOnly items)
+    if (isApprovedOnly) return !item.restricted && !item.normalOnly;
     if (item.normalOnly) return isNormal;
     if (item.restricted) return isPrivileged;
     return true;
@@ -113,9 +118,14 @@ export function Sidebar({ mobileOpen, onClose, collapsed, onToggleCollapse }: Si
         })}
       </nav>
 
-      {/* Version badge */}
+      {/* Version badge + approved notice */}
       {(!collapsed || isMobile) && (
-        <div className="p-3 border-t border-zinc-800">
+        <div className="p-3 border-t border-zinc-800 space-y-2">
+          {isApprovedOnly && (
+            <div className="bg-amber-900/40 border border-amber-700/50 rounded-lg px-3 py-2 text-xs text-amber-300 leading-relaxed">
+              ⚠️ Your account is approved but not yet activated. Contact an admin to gain full access.
+            </div>
+          )}
           <div className="bg-zinc-900 rounded-lg p-2.5 text-xs text-zinc-500">
             v1.0.0 Stable
           </div>
