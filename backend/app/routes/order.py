@@ -339,11 +339,11 @@ def get_my_deliveries():
 # ── GET /orders/salesmen ─────────────────────────────────────────────────────
 @order_bp.route('/salesmen', methods=['GET'], strict_slashes=False)
 def get_salesmen():
-    """Return all NORMAL + APPROVED users available as delivery persons."""
+    """Return all NORMAL + ACTIVE users available as delivery persons."""
     from app.models.user import User, UserRole, UserStatus
     salesmen = User.query.filter_by(
         role=UserRole.NORMAL,
-        status=UserStatus.APPROVED
+        status=UserStatus.ACTIVE
     ).all()
     return jsonify([
         {
