@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
 //fixed
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,33 +10,21 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  envDir: '../',
+  envDir: "../",
   server: {
     port: 3000,
     host: true,
-    allowedHosts: [
-      'bakeryiq.pro',
-      'www.bakeryiq.pro'
-    ],
+    allowedHosts: ["bakeryiq.pro", "www.bakeryiq.pro"],
     proxy: {
-      '/api': {
-        target: 'http://localhost:5001',
+      "/api": {
+        target: "http://localhost:5001",
         changeOrigin: true,
-      }
-    }
+      },
+    },
   },
   preview: {
     port: 3000,
     host: true,
-    allowedHosts: [
-      'bakeryiq.pro',
-      'www.bakeryiq.pro'
-    ],
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_PROXY_URL || 'http://backend:5000',
-        changeOrigin: true,
-      }
-    }
+    allowedHosts: ["bakeryiq.pro", "www.bakeryiq.pro"],
   },
-})
+});
