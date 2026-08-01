@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Scale, Shield, Users, Pencil, Trash2, Download, Upload } from "lucide-react";
 import { toast } from "react-toastify";

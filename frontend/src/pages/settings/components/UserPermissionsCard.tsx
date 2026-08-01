@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Shield, Check, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "@/config/constants";

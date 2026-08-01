@@ -50,12 +50,6 @@ interface InventoryItem {
   unit_measurement: string;
 }
 
-const emptyForm = () => ({
-  name: "",
-  instructions: "",
-  ingredients: [] as IngredientRow[],
-});
-
 export default function ProductRecipe() {
   const { uuid: productUuid } = useParams<{ uuid: string }>();
 

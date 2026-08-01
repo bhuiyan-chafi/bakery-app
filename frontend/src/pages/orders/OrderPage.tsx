@@ -339,7 +339,7 @@ export default function OrderPage() {
             </div>
 
             <div className="space-y-2">
-              {lines.map((line, idx) => (
+              {lines.map((line) => (
                 <div key={line.id} className="grid grid-cols-12 gap-2 items-center">
                   {/* Product searchable combobox */}
                   <div className="col-span-12 sm:col-span-4">

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingBasket, PlayCircle, Clock, DollarSign, Wallet, Truck } from "lucide-react";
 import { API_BASE_URL } from "@/config/constants";
