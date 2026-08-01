@@ -194,14 +194,15 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex justify-between items-center">
+      <div className="space-y-3">
+        {/* Title row */}
         <div>
           <h1 className="text-3xl font-light tracking-tight">Inventory</h1>
           <p className="text-muted-foreground mt-1">Manage raw materials and ingredients used in production.</p>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-3">
+        {/* Action buttons row */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" size="sm" className="h-9">
             <Link to="/inventory/manage" className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4" />

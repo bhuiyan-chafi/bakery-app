@@ -78,7 +78,6 @@ export function Navbar({ onMenuToggle, sidebarCollapsed, onToggleSidebar }: Navb
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
               Settings
             </DropdownMenuItem>

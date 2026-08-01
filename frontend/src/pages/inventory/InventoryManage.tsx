@@ -240,7 +240,8 @@ export default function InventoryManage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="space-y-3">
+        {/* Title row */}
         <div>
           <div className="flex items-center gap-2 mb-1">
             <Link to="/inventory" className="text-muted-foreground hover:text-black transition-colors">
@@ -251,6 +252,8 @@ export default function InventoryManage() {
           <p className="text-muted-foreground mt-1">Record and track incoming and outgoing inventory transactions.</p>
         </div>
 
+        {/* Action buttons row */}
+        <div className="flex flex-wrap items-center gap-2">
         <Dialog
           open={isModalOpen}
           onOpenChange={(open) => {
@@ -411,7 +414,8 @@ export default function InventoryManage() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+        </div>{/* end buttons row */}
+      </div>{/* end header */}
 
       {/* Table */}
       <div className="bg-white rounded-md border shadow-sm overflow-hidden">

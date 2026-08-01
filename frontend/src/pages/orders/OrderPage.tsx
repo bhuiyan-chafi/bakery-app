@@ -238,7 +238,7 @@ export default function OrderPage() {
   return (
     <div className="space-y-6">
       {/* ── Row 1: Header ─────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-3">
         <div>
           <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
             <ShoppingCart className="w-7 h-7 text-zinc-400" />
@@ -246,12 +246,14 @@ export default function OrderPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Create and manage customer orders.</p>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-9">
-          <Link to="/orders/manage" className="flex items-center gap-2">
-            <ClipboardList className="w-4 h-4" />
-            Manage Orders
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="h-9">
+            <Link to="/orders/manage" className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4" />
+              Manage Orders
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

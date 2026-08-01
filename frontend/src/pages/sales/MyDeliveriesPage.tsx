@@ -97,7 +97,7 @@ export default function MyDeliveriesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <div>
           <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
             <Truck className="w-7 h-7 text-zinc-400" />
@@ -107,7 +107,7 @@ export default function MyDeliveriesPage() {
             Orders assigned to you for delivery.
           </p>
         </div>
-        <div className="flex gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center">
             <div className="text-2xl font-semibold text-amber-700">{pendingCount}</div>
             <div className="text-xs text-amber-600">Pending</div>
@@ -129,70 +129,82 @@ export default function MyDeliveriesPage() {
             <p className="text-muted-foreground italic">No deliveries assigned to you yet.</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-zinc-50 border-b text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                <th className="text-left px-5 py-3">#</th>
-                <th className="text-left px-5 py-3">Customer</th>
-                <th className="text-left px-5 py-3">Phone</th>
-                <th className="text-left px-5 py-3">Address</th>
-                <th className="text-left px-5 py-3">Status</th>
-                <th className="text-left px-5 py-3">Date</th>
-                <th className="text-right px-5 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {orders.map(order => {
-                const isComplete = order.status === "complete";
-                return (
-                  <tr key={order.uuid} className="hover:bg-zinc-50/50 transition-colors">
-                    <td className="px-5 py-3 font-mono text-xs text-zinc-500">{order.order_number}</td>
-                    <td className="px-5 py-3 font-medium">{order.customer_name}</td>
-                    <td className="px-5 py-3 text-zinc-500">{order.phone ?? <span className="text-zinc-300">—</span>}</td>
-                    <td className="px-5 py-3 text-zinc-500 max-w-[180px] truncate">
-                      {order.address ?? <span className="text-zinc-300">—</span>}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border", STATUS_STYLE[order.status] ?? "bg-zinc-100 text-zinc-600")}>
-                        {cap(order.status)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-zinc-500 whitespace-nowrap">{formatDate(order.created_at)}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-1">
-                        {/* View details */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-zinc-50 border-b text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                  <th className="text-left px-5 py-3 whitespace-nowrap">#</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap md:hidden">Actions</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap">Customer</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap">Phone</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap">Address</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap">Status</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap">Date</th>
+                  <th className="text-right px-5 py-3 whitespace-nowrap hidden md:table-cell">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {orders.map(order => {
+                  const isComplete = order.status === "complete";
+                  const ActionButtons = (
+                    <div className="flex gap-1">
+                      {/* View details */}
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-8 w-8 text-zinc-400 hover:text-zinc-700 shrink-0"
+                        title="View order details"
+                        onClick={() => setViewOrder(order)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+
+                      {/* Mark as delivered */}
+                      {!isComplete && (
                         <Button
                           variant="ghost" size="icon"
-                          className="h-8 w-8 text-zinc-400 hover:text-zinc-700"
-                          title="View order details"
-                          onClick={() => setViewOrder(order)}
+                          className="h-8 w-8 text-zinc-400 hover:text-emerald-600 shrink-0"
+                          title="Mark as delivered"
+                          disabled={markingId === order.uuid}
+                          onClick={() => handleMarkDelivered(order)}
                         >
-                          <Eye className="h-4 w-4" />
+                          <CheckCircle className="h-4 w-4" />
                         </Button>
+                      )}
 
-                        {/* Mark as delivered */}
-                        {!isComplete && (
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-8 w-8 text-zinc-400 hover:text-emerald-600"
-                            title="Mark as delivered"
-                            disabled={markingId === order.uuid}
-                            onClick={() => handleMarkDelivered(order)}
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-
-                        {isComplete && (
-                          <span className="text-xs text-zinc-300 flex items-center px-2">Delivered</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {isComplete && (
+                        <span className="text-xs text-zinc-300 flex items-center px-2">Delivered</span>
+                      )}
+                    </div>
+                  );
+                  
+                  return (
+                    <tr key={order.uuid} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="px-5 py-3 font-mono text-xs text-zinc-500">{order.order_number}</td>
+                      <td className="px-5 py-3 whitespace-nowrap md:hidden">
+                        {ActionButtons}
+                      </td>
+                      <td className="px-5 py-3 font-medium whitespace-nowrap">{order.customer_name}</td>
+                      <td className="px-5 py-3 text-zinc-500 whitespace-nowrap">{order.phone ?? <span className="text-zinc-300">—</span>}</td>
+                      <td className="px-5 py-3 text-zinc-500 max-w-[180px] truncate">
+                        {order.address ?? <span className="text-zinc-300">—</span>}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border", STATUS_STYLE[order.status] ?? "bg-zinc-100 text-zinc-600")}>
+                          {cap(order.status)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-zinc-500 whitespace-nowrap">{formatDate(order.created_at)}</td>
+                      <td className="px-5 py-3 whitespace-nowrap hidden md:table-cell">
+                        <div className="flex justify-end">
+                          {ActionButtons}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

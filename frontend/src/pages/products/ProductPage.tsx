@@ -187,13 +187,15 @@ export default function ProductPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="space-y-3">
+        {/* Title row */}
         <div>
           <h1 className="text-3xl font-light tracking-tight">Products</h1>
           <p className="text-muted-foreground mt-1">Manage your bakery items, pricing, and stock.</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Action buttons row */}
+        <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="outline" size="sm" className="h-9">
             <Link to="/products/categories" className="flex items-center gap-2">
               <ListTree className="w-4 h-4" />

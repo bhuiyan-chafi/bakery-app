@@ -58,7 +58,7 @@ export default function AccountsPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-3">
         <div>
           <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
             <Wallet className="w-7 h-7 text-zinc-400" />
@@ -66,12 +66,14 @@ export default function AccountsPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Account Reports</p>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-9">
-          <Link to="/accounts/miscellaneous" className="flex items-center gap-2">
-            <Settings2 className="w-4 h-4" />
-            Miscellaneous
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="outline" size="sm" className="h-9">
+            <Link to="/accounts/miscellaneous" className="flex items-center gap-2">
+              <Settings2 className="w-4 h-4" />
+              Miscellaneous
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* ── Search Panel ──────────────────────────────────────────────────── */}
@@ -119,7 +121,7 @@ export default function AccountsPage() {
       {/* ── Results Table ─────────────────────────────────────────────────── */}
       {hasSearched && (
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 border-b bg-zinc-50/50 flex items-center justify-between">
+          <div className="p-4 border-b bg-zinc-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900">
               {type.charAt(0).toUpperCase() + type.slice(1)} Transactions
             </h3>

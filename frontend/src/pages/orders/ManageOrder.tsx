@@ -328,17 +328,15 @@ export default function ManageOrder() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link to="/orders" className="text-muted-foreground hover:text-black transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <h1 className="text-3xl font-light tracking-tight">Manage Orders</h1>
-          </div>
-          <p className="text-muted-foreground">View and manage the latest 50 customer orders. Click a row to see items.</p>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Link to="/orders" className="text-muted-foreground hover:text-black transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <h1 className="text-3xl font-light tracking-tight">Manage Orders</h1>
+          <span className="text-sm text-zinc-400 ml-1">{orders.length} order(s)</span>
         </div>
-        <div className="text-sm text-zinc-400">{orders.length} order(s)</div>
+        <p className="text-muted-foreground">View and manage the latest 50 customer orders. Click a row to see items.</p>
       </div>
 
       {/* Table */}

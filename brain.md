@@ -194,3 +194,31 @@ Now that we can download backup files from the settings, its time to add the opt
 - on upload it should initiate the restoration
 - once complete close all the session and logout the user to log back in
 - if there is an error then show a message and keep the current state
+
+### Mobile View:
+
+There are some issues in the mobile views.
+
+#### Product page
+
+In @ProductPage.tsx we have two issues in mobile view:
+
+- the first row with "Product" and small text with button gets shrikned horizontally and becomes long vertically. So, we have to fix the view for mobile.
+
+- also the buttons should be look nices. May be creating two rows for two things might solve the issue.
+
+#### Inventory
+
+- same fix for @InventoryManage.tsx and @InventoryPage.tsx
+
+#### Orders
+
+Fix all the views in @directory:orders
+
+#### Accounts
+
+Fix all the views in @directory:accounts
+
+#### My Orders Page
+
+Fix @MyDeliveriesPage.tsx

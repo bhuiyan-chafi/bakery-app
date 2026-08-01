@@ -86,7 +86,7 @@ export default function MiscellaneousPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         <Button asChild variant="ghost" size="icon" className="h-9 w-9 text-zinc-500 hover:text-zinc-900">
           <Link to="/accounts">
             <ArrowLeft className="w-4 h-4" />
@@ -104,9 +104,9 @@ export default function MiscellaneousPage() {
       {/* ── Add Transaction Form ──────────────────────────────────────────── */}
       <div className="bg-white border rounded-xl p-4 shadow-sm">
         <h3 className="text-sm font-semibold text-zinc-900 mb-4">Add New Transaction</h3>
-        <form onSubmit={handleSubmit} className="flex items-center gap-4 w-full overflow-x-auto pb-2">
-          <div className="flex-1 flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-600 whitespace-nowrap">Type:</span>
+        <form onSubmit={handleSubmit} className="flex flex-col lg:flex-row lg:items-end gap-4 w-full pb-2">
+          <div className="flex-1 space-y-1">
+            <span className="text-sm font-medium text-zinc-600">Type:</span>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="Select type" />
@@ -118,8 +118,8 @@ export default function MiscellaneousPage() {
             </Select>
           </div>
           
-          <div className="flex-1 flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-600 whitespace-nowrap">Note:</span>
+          <div className="flex-[2] space-y-1">
+            <span className="text-sm font-medium text-zinc-600">Note:</span>
             <Input 
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -129,8 +129,8 @@ export default function MiscellaneousPage() {
             />
           </div>
 
-          <div className="flex-1 flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-600 whitespace-nowrap">Amount:</span>
+          <div className="flex-1 space-y-1">
+            <span className="text-sm font-medium text-zinc-600">Amount:</span>
             <Input 
               type="number"
               step="0.01"
@@ -141,8 +141,8 @@ export default function MiscellaneousPage() {
             />
           </div>
 
-          <div className="flex-1 flex items-center gap-2">
-            <span className="text-sm font-medium text-zinc-600 whitespace-nowrap">Date:</span>
+          <div className="flex-1 space-y-1">
+            <span className="text-sm font-medium text-zinc-600">Date:</span>
             <Input 
               type="date" 
               value={date}
@@ -151,7 +151,7 @@ export default function MiscellaneousPage() {
             />
           </div>
 
-          <Button type="submit" className="h-9 px-6 flex items-center gap-2 shrink-0">
+          <Button type="submit" className="h-9 px-6 w-full lg:w-auto flex items-center justify-center gap-2 shrink-0">
             <Plus className="w-4 h-4" />
             Add
           </Button>
@@ -160,7 +160,7 @@ export default function MiscellaneousPage() {
 
       {/* ── Transactions List ───────────────────────────────────────────── */}
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="p-4 border-b bg-zinc-50/50 flex items-center justify-between">
+        <div className="p-4 border-b bg-zinc-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-zinc-900">Recent Transactions</h3>
           <Button variant="ghost" size="sm" onClick={fetchTransactions} disabled={loading} className="h-8">
             <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
