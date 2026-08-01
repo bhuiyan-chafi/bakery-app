@@ -17,7 +17,13 @@ export default defineConfig({
     allowedHosts: [
       'bakeryiq.pro',
       'www.bakeryiq.pro'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      }
+    }
   },
   preview: {
     port: 3000,
@@ -25,6 +31,12 @@ export default defineConfig({
     allowedHosts: [
       'bakeryiq.pro',
       'www.bakeryiq.pro'
-    ]
+    ],
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_PROXY_URL || 'http://backend:5000',
+        changeOrigin: true,
+      }
+    }
   },
 })
