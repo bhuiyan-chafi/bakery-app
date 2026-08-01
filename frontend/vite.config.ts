@@ -14,5 +14,9 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    allowedHosts: [
+      'bakeryiq.pro',
+      'www.bakeryiq.pro'
+    ]
   },
 })
