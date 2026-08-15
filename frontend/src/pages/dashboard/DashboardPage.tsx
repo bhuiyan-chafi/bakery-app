@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShoppingBasket, PlayCircle, Clock, DollarSign, Wallet, Truck } from "lucide-react";
+import { ShoppingBasket, PlayCircle, Clock, Banknote, Wallet, Truck } from "lucide-react";
 import { API_BASE_URL } from "@/config/constants";
 import { cn } from "@/lib/utils";
 
@@ -134,11 +134,8 @@ export default function DashboardPage() {
       label: "Total Sales",
       value: isLoadingOrders
         ? "..."
-        : (totalSalesCount ?? 0).toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-          }),
-      icon: DollarSign,
+        : "₦" + (totalSalesCount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      icon: Banknote,
       trendText: "Last 7 days",
       isNeutralTrend: true,
     },
@@ -146,7 +143,7 @@ export default function DashboardPage() {
       label: "Net Profit",
       value: isLoadingProfit
         ? "..."
-        : (profit7Days! < 0 ? "-" : "") + "$" + Math.abs(profit7Days ?? 0).toFixed(2),
+        : (profit7Days! < 0 ? "-" : "") + "₦" + Math.abs(profit7Days ?? 0).toFixed(2),
       icon: Wallet,
       trendText: "Last 7 days",
       isNeutralTrend: true,

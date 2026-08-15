@@ -17,7 +17,7 @@ export default defineConfig({
     allowedHosts: ["bakeryiq.pro", "www.bakeryiq.pro"],
     proxy: {
       "/api": {
-        target: "http://localhost:5001",
+        target: process.env.DOCKER_ENV ? "http://backend:5000" : "http://localhost:5001",
         changeOrigin: true,
       },
     },

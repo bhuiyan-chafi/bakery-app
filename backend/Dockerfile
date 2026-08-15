@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update -o Acquire::ForceIPv4=true && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Acquire::ForceIPv4=true \
     libpq-dev \
     gcc \
     postgresql-client \

@@ -196,7 +196,7 @@ export default function MiscellaneousPage() {
                   </TableCell>
                   <TableCell>{t.transaction_on}</TableCell>
                   <TableCell className="text-right font-medium">
-                    ${Number(t.amount).toFixed(2)}
+                    ₦{Number(t.amount).toFixed(2)}
                   </TableCell>
                 </TableRow>
               ))

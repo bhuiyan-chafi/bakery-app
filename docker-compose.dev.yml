@@ -17,7 +17,9 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      network: host
     container_name: bakery_backend
     environment:
       - APP_NAME=${APP_NAME}
@@ -36,7 +38,10 @@ services:
       - ./backend:/app
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: builder
+    command: npm run dev
     container_name: bakery_frontend
     ports:
       - "3000:3000"
@@ -45,6 +50,7 @@ services:
       - /app/node_modules
     environment:
       - VITE_APP_NAME=${APP_NAME}
+      - DOCKER_ENV=true
     depends_on:
       - backend
 

@@ -128,7 +128,7 @@ export default function AccountsPage() {
             <span className={`text-sm font-medium px-3 py-1 rounded-md border shadow-sm bg-white ${
               type === 'profit' ? (totalAmount >= 0 ? 'text-green-600' : 'text-red-600') : 'text-zinc-700'
             }`}>
-              Total: {totalAmount < 0 ? '-' : ''}${Math.abs(totalAmount).toFixed(2)}
+              Total: {totalAmount < 0 ? '-' : ''}₦{Math.abs(totalAmount).toFixed(2)}
             </span>
           </div>
           <Table>
@@ -169,7 +169,7 @@ export default function AccountsPage() {
                     <TableCell>{t.note}</TableCell>
                     <TableCell className="text-right font-medium">
                       <span className={type === 'profit' ? (t.type === 'income' ? 'text-emerald-600' : 'text-rose-600') : ''}>
-                        {type === 'profit' && t.type === 'expense' ? '-' : ''}${Number(t.amount).toFixed(2)}
+                        {type === 'profit' && t.type === 'expense' ? '-' : ''}₦{Number(t.amount).toFixed(2)}
                       </span>
                     </TableCell>
                   </TableRow>

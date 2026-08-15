@@ -403,9 +403,9 @@ export default function ManageOrder() {
                       ) : <span className="text-zinc-300">—</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
-                      ${order.total.toFixed(2)}
+                      ₦{order.total.toFixed(2)}
                       {order.discount_amount > 0 && (
-                        <span className="ml-1 text-xs text-emerald-600">−${order.discount_amount.toFixed(2)}</span>
+                        <span className="ml-1 text-xs text-emerald-600">−₦{order.discount_amount.toFixed(2)}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-zinc-500 text-sm">{formatDate(order.created_at)}</TableCell>
@@ -542,8 +542,8 @@ export default function ManageOrder() {
                             <tr key={item.uuid}>
                               <td className="px-3 py-2 font-medium">{item.product_name}</td>
                               <td className="px-3 py-2 text-center text-zinc-500">{item.quantity}</td>
-                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">${item.unit_price.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right font-medium tabular-nums">${item.line_total.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">₦{item.unit_price.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right font-medium tabular-nums">₦{item.line_total.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -555,7 +555,7 @@ export default function ManageOrder() {
                   <div className="border rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between text-zinc-500">
                       <span>Subtotal</span>
-                      <span className="tabular-nums">${selectedOrder.subtotal.toFixed(2)}</span>
+                      <span className="tabular-nums">₦{selectedOrder.subtotal.toFixed(2)}</span>
                     </div>
                     {selectedOrder.discount_amount > 0 && (
                       <div className="flex justify-between text-emerald-600">
@@ -565,12 +565,12 @@ export default function ManageOrder() {
                             ? ` (${selectedOrder.discount_value}%)`
                             : ""}
                         </span>
-                        <span className="tabular-nums">−${selectedOrder.discount_amount.toFixed(2)}</span>
+                        <span className="tabular-nums">−₦{selectedOrder.discount_amount.toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-semibold text-base border-t pt-2 mt-1">
                       <span>Total</span>
-                      <span className="tabular-nums">${selectedOrder.total.toFixed(2)}</span>
+                      <span className="tabular-nums">₦{selectedOrder.total.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -619,7 +619,7 @@ export default function ManageOrder() {
                             <tr key={item.uuid}>
                               <td className="py-1 break-words align-top pr-1">{item.product_name}</td>
                               <td className="text-right py-1 align-top">{item.quantity}</td>
-                              <td className="text-right py-1 align-top">${item.line_total.toFixed(2)}</td>
+                              <td className="text-right py-1 align-top">₦{item.line_total.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -629,17 +629,17 @@ export default function ManageOrder() {
                     <div className="text-xs space-y-1 mb-4">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>${selectedOrder.subtotal.toFixed(2)}</span>
+                        <span>₦{selectedOrder.subtotal.toFixed(2)}</span>
                       </div>
                       {selectedOrder.discount_amount > 0 && (
                         <div className="flex justify-between">
                           <span>Discount:</span>
-                          <span>-${selectedOrder.discount_amount.toFixed(2)}</span>
+                          <span>-₦{selectedOrder.discount_amount.toFixed(2)}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-bold text-sm mt-1 border-t border-black pt-1">
                         <span>Total:</span>
-                        <span>${selectedOrder.total.toFixed(2)}</span>
+                        <span>₦{selectedOrder.total.toFixed(2)}</span>
                       </div>
                     </div>
 
@@ -700,7 +700,7 @@ export default function ManageOrder() {
                       <Select value={editForm.discount_type} onValueChange={v => setEditForm({ ...editForm, discount_type: v })}>
                         <SelectTrigger id="edit-disc-type"><SelectValue /></SelectTrigger>
                         <SelectContent className="z-[200]">
-                          <SelectItem value="amount">Fixed Amount ($)</SelectItem>
+                          <SelectItem value="amount">Fixed Amount (₦)</SelectItem>
                           <SelectItem value="percent">Percentage (%)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -747,7 +747,7 @@ export default function ManageOrder() {
                                   }}
                                 >
                                   <span className="flex-1">{p.name}</span>
-                                  <span className="text-zinc-400 text-xs tabular-nums">${(p.price || 0).toFixed(2)}</span>
+                                  <span className="text-zinc-400 text-xs tabular-nums">₦{(p.price || 0).toFixed(2)}</span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -784,7 +784,7 @@ export default function ManageOrder() {
                                 />
                               </td>
                               <td className="px-3 py-2 text-right text-zinc-600 tabular-nums">
-                                ${(item.quantity * item.unit_price).toFixed(2)}
+                                ₦{(item.quantity * item.unit_price).toFixed(2)}
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <Button
@@ -819,17 +819,17 @@ export default function ManageOrder() {
                       <div className="border rounded-lg p-3 space-y-1.5 text-xs bg-zinc-50/50">
                         <div className="flex justify-between text-zinc-500">
                           <span>Subtotal</span>
-                          <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                          <span className="tabular-nums">₦{subtotal.toFixed(2)}</span>
                         </div>
                         {discountAmt > 0 && (
                           <div className="flex justify-between text-emerald-600">
-                            <span>Discount ({editForm.discount_type === "percent" ? `${discountVal}%` : `$${discountVal}`})</span>
-                            <span className="tabular-nums">−${discountAmt.toFixed(2)}</span>
+                            <span>Discount ({editForm.discount_type === "percent" ? `${discountVal}%` : `₦${discountVal}`})</span>
+                            <span className="tabular-nums">−₦{discountAmt.toFixed(2)}</span>
                           </div>
                         )}
                         <div className="flex justify-between font-semibold text-sm border-t pt-1.5 mt-1">
                           <span>Calculated Total</span>
-                          <span className="tabular-nums">${total.toFixed(2)}</span>
+                          <span className="tabular-nums">₦{total.toFixed(2)}</span>
                         </div>
                       </div>
                     );

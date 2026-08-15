@@ -222,3 +222,7 @@ Fix all the views in @directory:accounts
 #### My Orders Page
 
 Fix @MyDeliveriesPage.tsx
+
+### Changing the Currency Symbol
+
+The application is running in Nigeria. The symbol is Naira there. I want you to look every frontend page in "frontend/src/pages" to find the dollar symbols and then change it with Naira.

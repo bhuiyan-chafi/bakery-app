@@ -286,7 +286,7 @@ export default function SalesPage() {
                   {/* Unit price */}
                   <div className="col-span-3 sm:col-span-2">
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">₦</span>
                       <Input type="number" min={0} step={0.01} className="h-9 pl-5 text-right" value={line.unit_price}
                         onChange={e => updateLine(line.id, { unit_price: parseFloat(e.target.value) || 0 })} />
                     </div>
@@ -318,11 +318,11 @@ export default function SalesPage() {
             <div className="space-y-2 text-sm border-t pt-4">
               <div className="flex justify-between text-zinc-500">
                 <span>Subtotal</span>
-                <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                <span className="tabular-nums">₦{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-semibold text-base border-t pt-2 mt-2">
                 <span>Total</span>
-                <span className="tabular-nums text-zinc-900">${subtotal.toFixed(2)}</span>
+                <span className="tabular-nums text-zinc-900">₦{subtotal.toFixed(2)}</span>
               </div>
             </div>
 
@@ -332,7 +332,7 @@ export default function SalesPage() {
 
             <Button onClick={handleSubmit} disabled={isSubmitting}
               className="w-full bg-zinc-900 text-white hover:bg-zinc-700 h-11 text-base font-medium">
-              {isSubmitting ? "Placing Order…" : `Place Order · $${subtotal.toFixed(2)}`}
+              {isSubmitting ? "Placing Order…" : `Place Order · ₦${subtotal.toFixed(2)}`}
             </Button>
 
             <Button onClick={resetForm} variant="ghost" size="sm" className="w-full text-zinc-400">

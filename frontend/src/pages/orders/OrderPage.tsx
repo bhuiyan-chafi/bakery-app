@@ -442,7 +442,7 @@ export default function OrderPage() {
                   {/* Unit price */}
                   <div className="col-span-4 sm:col-span-2">
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">₦</span>
                       <Input
                         type="number"
                         min={0}
@@ -463,7 +463,7 @@ export default function OrderPage() {
 
                   {/* Line total */}
                   <div className="col-span-3 sm:col-span-1 text-right text-sm font-medium text-zinc-700 tabular-nums">
-                    ${(line.quantity * line.unit_price).toFixed(2)}
+                    ₦{(line.quantity * line.unit_price).toFixed(2)}
                   </div>
 
                   {/* Remove */}
@@ -517,7 +517,7 @@ export default function OrderPage() {
               </div>
               <div className="relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">
-                  {discountMode === "amount" ? "$" : "%"}
+                  {discountMode === "amount" ? "₦" : "%"}
                 </span>
                 <Input
                   type="number"
@@ -536,17 +536,17 @@ export default function OrderPage() {
             <div className="space-y-2 text-sm border-t pt-4">
               <div className="flex justify-between text-zinc-500">
                 <span>Subtotal</span>
-                <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                <span className="tabular-nums">₦{subtotal.toFixed(2)}</span>
               </div>
               {discountAmt > 0 && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Discount {discountMode === "percent" && `(${discountValue}%)`}</span>
-                  <span className="tabular-nums">−${discountAmt.toFixed(2)}</span>
+                  <span className="tabular-nums">−₦{discountAmt.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-semibold text-base border-t pt-2 mt-2">
+              <div className="flex justify-between font-semibold text-lg border-t pt-2 mt-1">
                 <span>Total</span>
-                <span className="tabular-nums text-zinc-900">${total.toFixed(2)}</span>
+                <span className="tabular-nums text-zinc-900">₦{total.toFixed(2)}</span>
               </div>
             </div>
 
@@ -560,7 +560,7 @@ export default function OrderPage() {
               disabled={isSubmitting}
               className="w-full bg-zinc-900 text-white hover:bg-zinc-700 h-11 text-base font-medium"
             >
-              {isSubmitting ? "Placing Order…" : `Place Order · $${total.toFixed(2)}`}
+              {isSubmitting ? "Placing Order…" : `Place Order · ₦${total.toFixed(2)}`}
             </Button>
 
             <Button onClick={resetForm} variant="ghost" size="sm" className="w-full text-zinc-400">

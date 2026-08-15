@@ -280,7 +280,7 @@ export default function ProductPage() {
                   <Label htmlFor="product-price">Price</Label>
                   <div className="flex items-center gap-0">
                     <span className="h-9 px-3 flex items-center border border-r-0 rounded-l-md bg-zinc-50 text-zinc-500 text-sm">
-                      $
+                      ₦
                     </span>
                     <Input
                       id="product-price"
@@ -352,7 +352,7 @@ export default function ProductPage() {
                 <TableRow key={p.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-zinc-500">{p.category_name}</TableCell>
-                  <TableCell className="text-zinc-500">${p.price.toFixed(2)}</TableCell>
+                  <TableCell className="text-zinc-500">₦{p.price.toFixed(2)}</TableCell>
                   <TableCell>
                     {(() => {
                       const stock = p.current_stock ?? 0;
