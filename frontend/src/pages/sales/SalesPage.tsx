@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/config/constants";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Product {
   uuid: string;
@@ -29,6 +30,9 @@ interface OrderLine {
 let lineIdCounter = 1;
 
 export default function SalesPage() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasPermission("sale:view");
+
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
   const username = user?.username ?? "";
@@ -46,15 +50,23 @@ export default function SalesPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/products/`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/products/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load products");
-      setProducts(await res.json());
+      const data = await res.json();
+      setProducts(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Could not load products");
     }
   }, []);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  useEffect(() => {
+    if (canView) {
+      fetchProducts();
+    }
+  }, [canView, fetchProducts]);
 
   const addLine = () => {
     setLines(prev => [
@@ -104,6 +116,7 @@ export default function SalesPage() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const payload = {
         customer_name: customerName.trim(),
         phone: phone.trim(),
@@ -126,7 +139,10 @@ export default function SalesPage() {
 
       const res = await fetch(`${API_BASE_URL}/orders/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -139,6 +155,15 @@ export default function SalesPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to make sales.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

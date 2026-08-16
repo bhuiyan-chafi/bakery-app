@@ -45,6 +45,7 @@ import { Label } from "@/components/ui/label";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Transaction {
   uuid: string;
@@ -66,6 +67,10 @@ interface InventoryItem {
 }
 
 export default function InventoryManage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canViewPurchase = hasAnyPermission("inventory:view-purchase", "inventory:manage-purchase");
+  const canManagePurchase = hasPermission("inventory:manage-purchase");
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [filteredInventory, setFilteredInventory] = useState<InventoryItem[]>([]);
@@ -86,16 +91,23 @@ export default function InventoryManage() {
   const [supplier, setSupplier] = useState("");
 
   useEffect(() => {
-    fetchTransactions();
-    fetchInventory();
-  }, []);
+    if (canViewPurchase) {
+      fetchTransactions();
+      fetchInventory();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canViewPurchase, isLoadingPermissions]);
 
   const fetchTransactions = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory/transactions`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/inventory/transactions`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch transactions");
       const data = await response.json();
-      setTransactions(data);
+      setTransactions(Array.isArray(data) ? data : []);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -105,11 +117,15 @@ export default function InventoryManage() {
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory/`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/inventory/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch inventory");
       const data = await response.json();
-      setInventoryItems(data);
-      setFilteredInventory(data);
+      const items = Array.isArray(data) ? data : [];
+      setInventoryItems(items);
+      setFilteredInventory(items);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -140,6 +156,7 @@ export default function InventoryManage() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const url = editUuid
         ? `${API_BASE_URL}/inventory/transactions/${editUuid}`
         : `${API_BASE_URL}/inventory/transactions`;
@@ -147,7 +164,10 @@ export default function InventoryManage() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           inventory_uuid: selectedInventoryUuid,
           quantity: parseFloat(quantity),
@@ -188,8 +208,10 @@ export default function InventoryManage() {
   const handleDelete = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) return;
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/inventory/transactions/${uuid}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) {
         const data = await response.json();
@@ -204,9 +226,13 @@ export default function InventoryManage() {
 
   const handleStatusChange = async (uuid: string, newStatus: "APPROVED" | "REJECTED") => {
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/inventory/transactions/${uuid}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ status: newStatus }),
       });
       if (!response.ok) {
@@ -237,6 +263,15 @@ export default function InventoryManage() {
     OUT: "bg-orange-100 text-orange-700",
   };
 
+  if (!isLoadingPermissions && !canViewPurchase) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view inventory purchases.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -249,24 +284,25 @@ export default function InventoryManage() {
             </Link>
             <h1 className="text-3xl font-light tracking-tight">Manage Inventory</h1>
           </div>
-          <p className="text-muted-foreground mt-1">Record and track incoming and outgoing inventory transactions.</p>
+          <p className="text-muted-foreground mt-1">Record and track incoming and outgoing inventory purchase.</p>
         </div>
 
         {/* Action buttons row */}
         <div className="flex flex-wrap items-center gap-2">
-        <Dialog
-          open={isModalOpen}
-          onOpenChange={(open) => {
-            setIsModalOpen(open);
-            if (!open) resetForm();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="bg-black text-white hover:bg-zinc-800">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Transaction
-            </Button>
-          </DialogTrigger>
+        {canManagePurchase && (
+          <Dialog
+            open={isModalOpen}
+            onOpenChange={(open) => {
+              setIsModalOpen(open);
+              if (!open) resetForm();
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className="bg-black text-white hover:bg-zinc-800">
+                <Plus className="w-4 h-4 mr-2" />
+                New Purchase
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle>{editUuid ? "Edit Transaction" : "New Transaction"}</DialogTitle>
@@ -414,6 +450,7 @@ export default function InventoryManage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
         </div>{/* end buttons row */}
       </div>{/* end header */}
 
@@ -429,20 +466,20 @@ export default function InventoryManage() {
               <TableHead className="font-medium">Status</TableHead>
               <TableHead className="font-medium">Supplier</TableHead>
               <TableHead className="font-medium">Date</TableHead>
-              <TableHead className="text-right font-medium">Action</TableHead>
+              {canManagePurchase && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={canManagePurchase ? 8 : 7} className="text-center py-10 text-muted-foreground italic">
                   Loading transactions...
                 </TableCell>
               </TableRow>
             ) : transactions.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground italic">
-                  No transactions found. Click "Add Transaction" to get started.
+                <TableCell colSpan={canManagePurchase ? 8 : 7} className="text-center py-10 text-muted-foreground italic">
+                  No transactions found. {canManagePurchase ? 'Click "New Purchase" to get started.' : ''}
                 </TableCell>
               </TableRow>
             ) : (
@@ -458,7 +495,7 @@ export default function InventoryManage() {
                       {t.transaction_type}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-zinc-500">{t.cost.toFixed(2)}</TableCell>
+                  <TableCell className="text-zinc-500">{t.cost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn("border-none capitalize font-normal", statusColors[t.status])}>
                       {t.status}
@@ -466,48 +503,50 @@ export default function InventoryManage() {
                   </TableCell>
                   <TableCell className="text-zinc-500 italic">{t.supplier || "—"}</TableCell>
                   <TableCell className="text-zinc-500 text-sm">{formatDate(t.datetime)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {t.status === "PENDING" && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-zinc-500 hover:text-emerald-600"
-                            title="Approve"
-                            onClick={() => handleStatusChange(t.uuid, "APPROVED")}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-zinc-500 hover:text-red-600"
-                            title="Reject"
-                            onClick={() => handleStatusChange(t.uuid, "REJECTED")}
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-black"
-                        onClick={() => handleEdit(t)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-red-600"
-                        onClick={() => handleDelete(t.uuid)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {canManagePurchase && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {t.status === "PENDING" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-zinc-500 hover:text-emerald-600"
+                              title="Approve"
+                              onClick={() => handleStatusChange(t.uuid, "APPROVED")}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-zinc-500 hover:text-red-600"
+                              title="Reject"
+                              onClick={() => handleStatusChange(t.uuid, "REJECTED")}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-black"
+                          onClick={() => handleEdit(t)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-red-600"
+                          onClick={() => handleDelete(t.uuid)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

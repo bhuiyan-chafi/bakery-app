@@ -45,6 +45,7 @@ import { Label } from "@/components/ui/label";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Category {
   uuid: string;
@@ -54,6 +55,10 @@ interface Category {
 }
 
 export default function CategoryPage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasAnyPermission("product:view", "product:manage");
+  const canManage = hasPermission("product:manage");
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,12 +74,19 @@ export default function CategoryPage() {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    if (canView) {
+      fetchCategories();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canView, isLoadingPermissions]);
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/categories`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/products/categories`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch categories");
       const data = await response.json();
       setCategories(data);
@@ -91,7 +103,10 @@ export default function CategoryPage() {
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}/products/categories/search/${query}`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/products/categories/search/${query}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data);
@@ -131,9 +146,13 @@ export default function CategoryPage() {
       
       const method = editUuid ? "PUT" : "POST";
 
+      const token = localStorage.getItem("token");
       const response = await fetch(url, {
         method: method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
 
@@ -166,8 +185,10 @@ export default function CategoryPage() {
     if (!confirm("Are you sure you want to delete this category?")) return;
 
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/products/categories/${uuid}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
       if (!response.ok) {
@@ -189,6 +210,15 @@ export default function CategoryPage() {
     return parent ? parent.name : "Unknown Parent";
   };
 
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view product categories.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -202,16 +232,17 @@ export default function CategoryPage() {
           <p className="text-muted-foreground mt-1">Manage your product grouping and hierarchy.</p>
         </div>
         
-        <Dialog open={isModalOpen} onOpenChange={(open) => {
-          setIsModalOpen(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button className="bg-black text-white hover:bg-zinc-800">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Category
-            </Button>
-          </DialogTrigger>
+        {canManage && (
+          <Dialog open={isModalOpen} onOpenChange={(open) => {
+            setIsModalOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button className="bg-black text-white hover:bg-zinc-800">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Category
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>{editUuid ? "Edit Category" : "Add New Category"}</DialogTitle>
@@ -318,6 +349,7 @@ export default function CategoryPage() {
             </form>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       <div className="bg-white rounded-md border shadow-sm overflow-hidden">
@@ -327,19 +359,19 @@ export default function CategoryPage() {
               <TableHead className="font-medium">Category Name</TableHead>
               <TableHead className="font-medium">Parent</TableHead>
               <TableHead className="font-medium">Status</TableHead>
-              <TableHead className="text-right font-medium">Action</TableHead>
+              {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={canManage ? 4 : 3} className="text-center py-10 text-muted-foreground italic">
                   Loading categories...
                 </TableCell>
               </TableRow>
             ) : categories.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={canManage ? 4 : 3} className="text-center py-10 text-muted-foreground italic">
                   No categories found.
                 </TableCell>
               </TableRow>
@@ -363,26 +395,28 @@ export default function CategoryPage() {
                       {category.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-zinc-500 hover:text-black"
-                        onClick={() => handleEdit(category)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 text-zinc-500 hover:text-red-600"
-                        onClick={() => handleDelete(category.uuid)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-zinc-500 hover:text-black"
+                          onClick={() => handleEdit(category)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-zinc-500 hover:text-red-600"
+                          onClick={() => handleDelete(category.uuid)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

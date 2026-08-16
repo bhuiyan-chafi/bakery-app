@@ -14,6 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
 import { APP_NAME, API_BASE_URL } from "@/config/constants";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Order {
   uuid: string;
@@ -68,6 +69,9 @@ const formatDate = (iso: string) =>
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function ManageOrder() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canManage = hasPermission("order:manage");
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -93,9 +97,13 @@ export default function ManageOrder() {
 
   const fetchSalesmen = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/salesmen`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/salesmen`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) return;
       const data: { uuid: string; username: string; name: string }[] = await res.json();
+      if (!Array.isArray(data)) return;
       const map: Record<string, string> = {};
       data.forEach(s => { map[s.username] = s.name; });
       setUsernameToName(map);
@@ -106,10 +114,13 @@ export default function ManageOrder() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/products/`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/products/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load products");
       const data = await res.json();
-      setProducts(data);
+      setProducts(Array.isArray(data) ? data : []);
     } catch (err: any) {
       console.error("Error loading products:", err);
     }
@@ -118,10 +129,13 @@ export default function ManageOrder() {
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/?limit=50`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/?limit=50`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load orders");
       const data = await res.json();
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : []);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -130,16 +144,23 @@ export default function ManageOrder() {
   }, []);
 
   useEffect(() => {
-    fetchOrders();
-    fetchProducts();
-    fetchSalesmen();
-  }, [fetchOrders, fetchProducts, fetchSalesmen]);
+    if (canManage) {
+      fetchOrders();
+      fetchProducts();
+      fetchSalesmen();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canManage, isLoadingPermissions, fetchOrders, fetchProducts, fetchSalesmen]);
 
   const openDetail = async (uuid: string) => {
     setIsDetailLoading(true);
     setIsDetailOpen(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/${uuid}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/${uuid}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load order details");
       const data: OrderDetail = await res.json();
       setSelectedOrder(data);
@@ -160,7 +181,11 @@ export default function ManageOrder() {
     e.stopPropagation();
     if (!confirm("Delete this order? This cannot be undone.")) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/${uuid}`, { method: "DELETE" });
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/${uuid}`, { 
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to delete order");
@@ -176,9 +201,13 @@ export default function ManageOrder() {
     e.stopPropagation();
     if (!confirm("Approve this order? This will mark it as Complete and cannot be undone.")) return;
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/orders/${uuid}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ status: "complete" }),
       });
       if (!res.ok) {
@@ -206,7 +235,10 @@ export default function ManageOrder() {
     });
     setEditItems([]);
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/${order.uuid}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/${order.uuid}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load order items for editing");
       const data: OrderDetail = await res.json();
       setEditItems(data.items || []);
@@ -290,9 +322,13 @@ export default function ManageOrder() {
 
     setIsEditSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/orders/${editingOrder.uuid}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           customer_name: editForm.customer_name,
           phone: editForm.phone || null,
@@ -324,6 +360,15 @@ export default function ManageOrder() {
       setIsEditSubmitting(false);
     }
   };
+
+  if (!isLoadingPermissions && !canManage) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to manage orders.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -403,9 +448,9 @@ export default function ManageOrder() {
                       ) : <span className="text-zinc-300">—</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums font-medium">
-                      ₦{order.total.toFixed(2)}
+                      ₦{order.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {order.discount_amount > 0 && (
-                        <span className="ml-1 text-xs text-emerald-600">−₦{order.discount_amount.toFixed(2)}</span>
+                        <span className="ml-1 text-xs text-emerald-600">−₦{order.discount_amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-zinc-500 text-sm">{formatDate(order.created_at)}</TableCell>
@@ -542,8 +587,8 @@ export default function ManageOrder() {
                             <tr key={item.uuid}>
                               <td className="px-3 py-2 font-medium">{item.product_name}</td>
                               <td className="px-3 py-2 text-center text-zinc-500">{item.quantity}</td>
-                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">₦{item.unit_price.toFixed(2)}</td>
-                              <td className="px-3 py-2 text-right font-medium tabular-nums">₦{item.line_total.toFixed(2)}</td>
+                              <td className="px-3 py-2 text-right text-zinc-500 tabular-nums">₦{item.unit_price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2 text-right font-medium tabular-nums">₦{item.line_total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -555,7 +600,7 @@ export default function ManageOrder() {
                   <div className="border rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between text-zinc-500">
                       <span>Subtotal</span>
-                      <span className="tabular-nums">₦{selectedOrder.subtotal.toFixed(2)}</span>
+                      <span className="tabular-nums">₦{selectedOrder.subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     {selectedOrder.discount_amount > 0 && (
                       <div className="flex justify-between text-emerald-600">
@@ -565,12 +610,12 @@ export default function ManageOrder() {
                             ? ` (${selectedOrder.discount_value}%)`
                             : ""}
                         </span>
-                        <span className="tabular-nums">−₦{selectedOrder.discount_amount.toFixed(2)}</span>
+                        <span className="tabular-nums">−₦{selectedOrder.discount_amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     <div className="flex justify-between font-semibold text-base border-t pt-2 mt-1">
                       <span>Total</span>
-                      <span className="tabular-nums">₦{selectedOrder.total.toFixed(2)}</span>
+                      <span className="tabular-nums">₦{selectedOrder.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                   </div>
 
@@ -619,7 +664,7 @@ export default function ManageOrder() {
                             <tr key={item.uuid}>
                               <td className="py-1 break-words align-top pr-1">{item.product_name}</td>
                               <td className="text-right py-1 align-top">{item.quantity}</td>
-                              <td className="text-right py-1 align-top">₦{item.line_total.toFixed(2)}</td>
+                              <td className="text-right py-1 align-top">₦{item.line_total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -629,17 +674,17 @@ export default function ManageOrder() {
                     <div className="text-xs space-y-1 mb-4">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>₦{selectedOrder.subtotal.toFixed(2)}</span>
+                        <span>₦{selectedOrder.subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       {selectedOrder.discount_amount > 0 && (
                         <div className="flex justify-between">
                           <span>Discount:</span>
-                          <span>-₦{selectedOrder.discount_amount.toFixed(2)}</span>
+                          <span>-₦{selectedOrder.discount_amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-bold text-sm mt-1 border-t border-black pt-1">
                         <span>Total:</span>
-                        <span>₦{selectedOrder.total.toFixed(2)}</span>
+                        <span>₦{selectedOrder.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>
 
@@ -747,7 +792,7 @@ export default function ManageOrder() {
                                   }}
                                 >
                                   <span className="flex-1">{p.name}</span>
-                                  <span className="text-zinc-400 text-xs tabular-nums">₦{(p.price || 0).toFixed(2)}</span>
+                                  <span className="text-zinc-400 text-xs tabular-nums">₦{(p.price || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -784,7 +829,7 @@ export default function ManageOrder() {
                                 />
                               </td>
                               <td className="px-3 py-2 text-right text-zinc-600 tabular-nums">
-                                ₦{(item.quantity * item.unit_price).toFixed(2)}
+                                ₦{(item.quantity * item.unit_price).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <Button
@@ -819,17 +864,17 @@ export default function ManageOrder() {
                       <div className="border rounded-lg p-3 space-y-1.5 text-xs bg-zinc-50/50">
                         <div className="flex justify-between text-zinc-500">
                           <span>Subtotal</span>
-                          <span className="tabular-nums">₦{subtotal.toFixed(2)}</span>
+                          <span className="tabular-nums">₦{subtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                         {discountAmt > 0 && (
                           <div className="flex justify-between text-emerald-600">
                             <span>Discount ({editForm.discount_type === "percent" ? `${discountVal}%` : `₦${discountVal}`})</span>
-                            <span className="tabular-nums">−₦{discountAmt.toFixed(2)}</span>
+                            <span className="tabular-nums">−₦{discountAmt.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         )}
                         <div className="flex justify-between font-semibold text-sm border-t pt-1.5 mt-1">
                           <span>Calculated Total</span>
-                          <span className="tabular-nums">₦{total.toFixed(2)}</span>
+                          <span className="tabular-nums">₦{total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                       </div>
                     );

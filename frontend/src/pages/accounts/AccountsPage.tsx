@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface AccountTransaction {
   uuid: string;
@@ -18,6 +19,10 @@ interface AccountTransaction {
 }
 
 export default function AccountsPage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasAnyPermission("account:view", "account:manage");
+  const canManage = hasPermission("account:manage");
+
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [type, setType] = useState("expense");
@@ -34,12 +39,16 @@ export default function AccountsPage() {
     try {
       setLoading(true);
       setHasSearched(true);
+      const token = localStorage.getItem("token");
       const res = await fetch(
-        `${API_BASE_URL}/accounts/transactions?start_date=${startDate}&end_date=${endDate}&type=${type}`
+        `${API_BASE_URL}/accounts/transactions?start_date=${startDate}&end_date=${endDate}&type=${type}`,
+        {
+          headers: { "Authorization": `Bearer ${token}` }
+        }
       );
       if (!res.ok) throw new Error("Failed to fetch account transactions");
       const data = await res.json();
-      setTransactions(data);
+      setTransactions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
       toast.error("Error fetching transactions");
@@ -55,6 +64,15 @@ export default function AccountsPage() {
     return acc + t.amount;
   }, 0);
 
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view account reports.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Header ────────────────────────────────────────────────────────── */}
@@ -66,14 +84,16 @@ export default function AccountsPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Account Reports</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/accounts/miscellaneous" className="flex items-center gap-2">
-              <Settings2 className="w-4 h-4" />
-              Miscellaneous
-            </Link>
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link to="/accounts/miscellaneous" className="flex items-center gap-2">
+                <Settings2 className="w-4 h-4" />
+                Miscellaneous
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Search Panel ──────────────────────────────────────────────────── */}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/config/constants";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface OrderItem {
   uuid: string;
@@ -41,6 +42,9 @@ const formatDate = (iso: string) =>
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function MyDeliveriesPage() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canViewOrders = hasPermission("sale:orders");
+
   const userStr = localStorage.getItem("user");
   const user = userStr ? JSON.parse(userStr) : null;
   const username = user?.username ?? "";
@@ -58,9 +62,13 @@ export default function MyDeliveriesPage() {
     if (!username) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/my-deliveries?username=${encodeURIComponent(username)}`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/my-deliveries?username=${encodeURIComponent(username)}`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load deliveries");
-      setOrders(await res.json());
+      const data = await res.json();
+      setOrders(Array.isArray(data) ? data : []);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -68,16 +76,26 @@ export default function MyDeliveriesPage() {
     }
   }, [username]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  useEffect(() => {
+    if (canViewOrders) {
+      fetchOrders();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canViewOrders, isLoadingPermissions, fetchOrders]);
 
   const handleMarkDelivered = async (order: DeliveryOrder) => {
     if (order.status === "complete") return;
     if (!confirm(`Mark order ${order.order_number} as delivered?`)) return;
     setMarkingId(order.uuid);
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/orders/${order.uuid}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ status: "complete" }),
       });
       const data = await res.json();
@@ -93,6 +111,15 @@ export default function MyDeliveriesPage() {
 
   const pendingCount = orders.filter(o => o.status === "pending").length;
   const doneCount = orders.filter(o => o.status === "complete").length;
+
+  if (!isLoadingPermissions && !canViewOrders) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view assigned orders.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

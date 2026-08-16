@@ -34,17 +34,15 @@ class Product(db.Model):
 
 class Recipe(db.Model):
     __tablename__ = 'recipes'
-    __table_args__ = (db.UniqueConstraint('product_uuid', 'name', name='uq_recipe_product_name'),)
 
     uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False, unique=True)
     instructions = db.Column(db.Text, nullable=True)
 
     ingredients = db.relationship('RecipeIngredient', backref='recipe', cascade='all, delete-orphan')
 
     def __repr__(self):
-        return f'<Recipe {self.name} for product {self.product_uuid}>'
+        return f'<Recipe {self.name}>'
 
 class RecipeIngredient(db.Model):
     __tablename__ = 'recipe_ingredients'
@@ -62,6 +60,7 @@ class RecipeIngredient(db.Model):
 class ProductionStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
+    FINISHED = "finished"
     COMPLETED = "completed"
 
 
@@ -69,10 +68,7 @@ class Production(db.Model):
     __tablename__ = 'productions'
 
     uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
     recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=False)
-    batch_quantity = db.Column(db.Float, nullable=False, default=1.0)
-    damaged_quantity = db.Column(db.Float, nullable=False, default=0.0)
     status = db.Column(db.Enum(ProductionStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=ProductionStatus.PENDING)
     produced_at = db.Column(db.DateTime, nullable=True)  # set only when status → completed
     notes = db.Column(db.Text, nullable=True)
@@ -91,7 +87,9 @@ class ProductTransaction(db.Model):
 
     uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     product_uuid = db.Column(db.String(36), db.ForeignKey('products.uuid'), nullable=False)
-    production_uuid = db.Column(db.String(36), db.ForeignKey('productions.uuid'), nullable=True)  # null for manual OUT
+    production_uuid = db.Column(db.String(36), db.ForeignKey('productions.uuid'), nullable=True)
+    recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=True)
+    order_uuid = db.Column(db.String(36), db.ForeignKey('orders.uuid'), nullable=True)
     transaction_type = db.Column(
         db.Enum(ProductTransactionType, values_callable=lambda obj: [e.value for e in obj]),
         nullable=False
@@ -101,4 +99,4 @@ class ProductTransaction(db.Model):
     notes = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
-        return f'<ProductTransaction {self.transaction_type.value} x{self.quantity} for {self.product_uuid}>'
+        return f'<ProductTransaction {self.transaction_type.value} x{self.quantity}>'

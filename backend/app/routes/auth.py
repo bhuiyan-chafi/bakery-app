@@ -20,7 +20,6 @@ def check_username():
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    from app.models.user import UserRole
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -34,7 +33,6 @@ def register():
 
     new_user = User(
         username=username,
-        role=UserRole.NORMAL,
         status=UserStatus.PENDING
     )
     new_user.set_password(password)
@@ -64,7 +62,7 @@ def login():
     if not user or not user.check_password(password):
         return jsonify({"error": "Invalid username or password"}), 401
 
-    ALLOWED_STATUSES = {UserStatus.APPROVED, UserStatus.ACTIVE}
+    ALLOWED_STATUSES = {UserStatus.ACTIVE}
     if user.status not in ALLOWED_STATUSES:
         return jsonify({"error": f"Account is {user.status.value}. Please contact support."}), 403
 
@@ -81,7 +79,6 @@ def login():
         "user": {
             "uuid": user.uuid,
             "username": user.username,
-            "role": user.role.value,
             "status": user.status.value
         }
     }), 200
@@ -100,7 +97,6 @@ def get_me():
     return jsonify({
         "uuid": user.uuid,
         "username": user.username,
-        "role": user.role.value if hasattr(user.role, 'value') else user.role,
         "status": user.status.value if hasattr(user.status, 'value') else user.status,
         "name": details.name if details else "",
         "phone": details.phone if details else "",
@@ -150,7 +146,6 @@ def update_me():
         "user": {
             "uuid": user.uuid,
             "username": user.username,
-            "role": user.role.value if hasattr(user.role, 'value') else user.role,
             "status": user.status.value if hasattr(user.status, 'value') else user.status,
             "name": user.details.name,
             "phone": user.details.phone,
@@ -183,8 +178,10 @@ def get_my_permissions():
         
     return jsonify(result), 200
 
+from app.utils.decorators import require_permission
+
 @auth_bp.route('/me/permissions/<permission_uuid>', methods=['PUT'])
-@jwt_required()
+@require_permission('user:manage')
 def update_my_permission(permission_uuid):
     from app.models.user import Permission, UserPermission, UserPermissionStatus
     current_user_id = get_jwt_identity()

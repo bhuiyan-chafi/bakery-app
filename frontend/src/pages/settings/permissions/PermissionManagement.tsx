@@ -44,7 +44,12 @@ export default function PermissionManagement() {
 
   const fetchPermissions = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/settings/permissions`);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/settings/permissions`, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error("Failed to fetch permissions");
       const data = await response.json();
       setPermissions(data);
@@ -70,6 +75,7 @@ export default function PermissionManagement() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem('token');
       const url = editUuid 
         ? `${API_BASE_URL}/settings/permissions/${editUuid}`
         : `${API_BASE_URL}/settings/permissions`;
@@ -77,7 +83,10 @@ export default function PermissionManagement() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ name: name.trim() }),
       });
 
@@ -106,8 +115,12 @@ export default function PermissionManagement() {
   const handleDelete = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this permission?")) return;
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`${API_BASE_URL}/settings/permissions/${uuid}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       });
       if (!response.ok) {
         const data = await response.json();

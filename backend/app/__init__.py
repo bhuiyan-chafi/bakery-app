@@ -22,6 +22,8 @@ def create_app():
     # Register blueprints
     from app.routes.auth import auth_bp
     from app.routes.product import product_bp
+    from app.routes.recipe import recipe_bp
+    from app.routes.production import production_bp
     from app.routes.settings import settings_bp
     from app.routes.inventory import inventory_bp
     from app.routes.order import order_bp
@@ -32,6 +34,8 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(product_bp, url_prefix='/api/products')
+    app.register_blueprint(recipe_bp, url_prefix='/api/recipes')
+    app.register_blueprint(production_bp, url_prefix='/api/productions')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
     app.register_blueprint(order_bp, url_prefix='/api/orders')
@@ -46,7 +50,31 @@ def create_app():
     @app.cli.command("seed-db")
     def seed_db():
         """Seeds the database with initial data."""
-        from app.models.user import User, UserRole, UserStatus
+        from app.models.user import User, UserStatus, Permission, UserPermission, UserPermissionStatus
+
+        # 1. Ensure initial permissions exist
+        initial_perms = [
+            'user:manage',
+            'product:view', 'product:manage',
+            'recipe:view', 'recipe:manage',
+            'production:view', 'production:manage',
+            'inventory:view', 'inventory:add',
+            'inventory:view-purchase', 'inventory:manage-purchase',
+            'order:view', 'order:manage',
+            'account:view', 'account:manage',
+            'sale:view', 'sale:orders'
+        ]
+        perm_objects = {}
+        for perm_name in initial_perms:
+            p = Permission.query.filter_by(name=perm_name).first()
+            if not p:
+                p = Permission(name=perm_name)
+                db.session.add(p)
+                db.session.commit()
+                print(f"Permission '{perm_name}' created.")
+            else:
+                print(f"Permission '{perm_name}' already exists.")
+            perm_objects[perm_name] = p
 
         admin_username = os.getenv('SEED_ADMIN_USERNAME')
         admin_password = os.getenv('SEED_ADMIN_PASSWORD')
@@ -55,21 +83,36 @@ def create_app():
             print("ERROR: SEED_ADMIN_USERNAME and SEED_ADMIN_PASSWORD must be set in the environment.")
             return
 
-        # Check if admin already exists
-        if User.query.filter_by(username=admin_username).first():
-            print("Admin user already exists.")
-            return
+        # 2. Check if admin user exists, otherwise create
+        admin = User.query.filter_by(username=admin_username).first()
+        if not admin:
+            admin = User(
+                username=admin_username,
+                status=UserStatus.ACTIVE
+            )
+            admin.set_password(admin_password)
+            db.session.add(admin)
+            db.session.commit()
+            print(f"Admin user '{admin_username}' created successfully.")
+        else:
+            print(f"Admin user '{admin_username}' already exists.")
 
-        admin = User(
-            username=admin_username,
-            role=UserRole.ADMIN,
-            status=UserStatus.ACTIVE
-        )
-        admin.set_password(admin_password)
-
-        db.session.add(admin)
-        db.session.commit()
-        print(f"Admin user '{admin_username}' created successfully.")
+        # 3. Ensure admin has active initial permissions
+        for perm_name, p in perm_objects.items():
+            admin_perm = UserPermission.query.filter_by(user_uuid=admin.uuid, permission_uuid=p.uuid).first()
+            if not admin_perm:
+                admin_perm = UserPermission(
+                    user_uuid=admin.uuid,
+                    permission_uuid=p.uuid,
+                    status=UserPermissionStatus.ACTIVE
+                )
+                db.session.add(admin_perm)
+                db.session.commit()
+                print(f"Assigned '{perm_name}' permission to '{admin_username}'.")
+            elif admin_perm.status != UserPermissionStatus.ACTIVE:
+                admin_perm.status = UserPermissionStatus.ACTIVE
+                db.session.commit()
+                print(f"Activated '{perm_name}' permission for '{admin_username}'.")
 
 
     @app.route('/health')

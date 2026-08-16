@@ -18,12 +18,26 @@ export const productRoutes: RouteObject[] = [
         path: 'categories',
         element: <CategoryPage />,
       },
+    ]
+  },
+  {
+    // Recipes — accessed from the sidebar (product selected via dropdown)
+    path: '/recipes',
+    element: <DashboardLayout />,
+    children: [
       {
-        path: ':uuid/recipe',
+        path: '',
         element: <ProductRecipe />,
-      },
+      }
+    ]
+  },
+  {
+    // Production — accessed from the sidebar (product selected via dropdown)
+    path: '/production',
+    element: <DashboardLayout />,
+    children: [
       {
-        path: ':uuid/production',
+        path: '',
         element: <ProductProduction />,
       }
     ]

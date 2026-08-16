@@ -10,12 +10,14 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/config/constants";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Product {
   uuid: string;
   name: string;
   price: number;
   current_stock: number;
+  stock_threshold: number;
 }
 
 interface Salesman {
@@ -49,6 +51,10 @@ const STATUS_STYLES: Record<string, string> = {
 let lineIdCounter = 1;
 
 export default function OrderPage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasAnyPermission("order:view", "order:manage");
+  const canManage = hasPermission("order:manage");
+
   const userStr = localStorage.getItem('user');
   const currentUser = userStr ? JSON.parse(userStr) : null;
   const username = currentUser?.username ?? null;
@@ -82,10 +88,13 @@ export default function OrderPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/products/`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/products/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load products");
       const data = await res.json();
-      setProducts(data);
+      setProducts(Array.isArray(data) ? data : []);
     } catch {
       toast.error("Could not load products");
     }
@@ -93,15 +102,24 @@ export default function OrderPage() {
 
   const fetchSalesmen = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/orders/salesmen`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/orders/salesmen`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to load salesmen");
-      setSalesmen(await res.json());
+      const data = await res.json();
+      setSalesmen(Array.isArray(data) ? data : []);
     } catch {
       // non-critical, silently fail
     }
   }, []);
 
-  useEffect(() => { fetchProducts(); fetchSalesmen(); }, [fetchProducts, fetchSalesmen]);
+  useEffect(() => {
+    if (canView) {
+      fetchProducts();
+      fetchSalesmen();
+    }
+  }, [canView, fetchProducts, fetchSalesmen]);
 
   // ── Line helpers ────────────────────────────────────────────────
   const addLine = () => {
@@ -219,9 +237,13 @@ export default function OrderPage() {
         })),
       };
 
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/orders/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -235,6 +257,15 @@ export default function OrderPage() {
     }
   };
 
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view or place orders.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Row 1: Header ─────────────────────────────────────────── */}
@@ -246,14 +277,16 @@ export default function OrderPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Create and manage customer orders.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/orders/manage" className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4" />
-              Manage Orders
-            </Link>
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link to="/orders/manage" className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" />
+                Manage Orders
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -379,8 +412,10 @@ export default function OrderPage() {
                                 >
                                   <span className="flex-1 truncate">{p.name}</span>
                                   <span className={cn(
-                                    "text-xs tabular-nums ml-2 shrink-0",
-                                    p.current_stock === 0 ? "text-red-400" : "text-zinc-400"
+                                    "text-xs tabular-nums ml-2 shrink-0 font-medium",
+                                    p.current_stock === 0 || (p.stock_threshold > 0 && p.current_stock <= p.stock_threshold)
+                                      ? "text-red-500"
+                                      : "text-emerald-600"
                                   )}>
                                     {p.current_stock} in stock
                                   </span>

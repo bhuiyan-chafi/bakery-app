@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check, ChefHat, Factory } from "lucide-react";
+import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Product {
   uuid: string;
@@ -54,6 +55,10 @@ interface Category {
 }
 
 export default function ProductPage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasAnyPermission("product:view", "product:manage");
+  const canManage = hasPermission("product:manage");
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
@@ -71,17 +76,22 @@ export default function ProductPage() {
   const [stockThreshold, setStockThreshold] = useState("0");
 
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-  }, []);
+    if (canView) {
+      fetchProducts();
+      fetchCategories();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canView, isLoadingPermissions]);
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/products/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch products");
       const data = await response.json();
-      // console.log("[ProductPage] raw API response:", data);
-      // console.log("[ProductPage] current_stock values:", data.map((p: any) => ({ name: p.name, current_stock: p.current_stock, type: typeof p.current_stock })));
       setProducts(data);
     } catch (error: any) {
       toast.error(error.message);
@@ -92,7 +102,10 @@ export default function ProductPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/products/categories`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/products/categories`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch categories");
       const data = await response.json();
       setCategories(data);
@@ -125,6 +138,7 @@ export default function ProductPage() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const url = editUuid
         ? `${API_BASE_URL}/products/${editUuid}`
         : `${API_BASE_URL}/products/`;
@@ -132,7 +146,10 @@ export default function ProductPage() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           name,
           category_uuid: selectedCategoryUuid,
@@ -170,8 +187,10 @@ export default function ProductPage() {
   const handleDelete = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/products/${uuid}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) {
         const data = await response.json();
@@ -183,6 +202,15 @@ export default function ProductPage() {
       toast.error(error.message);
     }
   };
+
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view products.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -203,19 +231,20 @@ export default function ProductPage() {
             </Link>
           </Button>
 
-          <Dialog
-            open={isModalOpen}
-            onOpenChange={(open) => {
-              setIsModalOpen(open);
-              if (!open) resetForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button size="sm" className="h-9 bg-black text-white hover:bg-zinc-800">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Product
-              </Button>
-            </DialogTrigger>
+          {canManage && (
+            <Dialog
+              open={isModalOpen}
+              onOpenChange={(open) => {
+                setIsModalOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button size="sm" className="h-9 bg-black text-white hover:bg-zinc-800">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Product
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>{editUuid ? "Edit Product" : "Add New Product"}</DialogTitle>
@@ -319,6 +348,7 @@ export default function ProductPage() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -331,20 +361,21 @@ export default function ProductPage() {
               <TableHead className="font-medium">Category</TableHead>
               <TableHead className="font-medium">Price</TableHead>
               <TableHead className="font-medium">Current Stock</TableHead>
-              <TableHead className="text-right font-medium">Action</TableHead>
+              <TableHead className="font-medium">Total Amount</TableHead>
+              {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">
                   Loading products...
                 </TableCell>
               </TableRow>
             ) : products.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
-                  No products found. Click "Add Product" to get started.
+                <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">
+                  No products found. {canManage ? 'Click "Add Product" to get started.' : ''}
                 </TableCell>
               </TableRow>
             ) : (
@@ -352,7 +383,7 @@ export default function ProductPage() {
                 <TableRow key={p.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-zinc-500">{p.category_name}</TableCell>
-                  <TableCell className="text-zinc-500">₦{p.price.toFixed(2)}</TableCell>
+                  <TableCell className="text-zinc-500">₦ {p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell>
                     {(() => {
                       const stock = p.current_stock ?? 0;
@@ -373,48 +404,31 @@ export default function ProductPage() {
                       );
                     })()}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-emerald-600"
-                        title="Production"
-                        asChild
-                      >
-                        <Link to={`/products/${p.uuid}/production`}>
-                          <Factory className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-violet-600"
-                        title="Recipe"
-                        asChild
-                      >
-                        <Link to={`/products/${p.uuid}/recipe`}>
-                          <ChefHat className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-black"
-                        onClick={() => handleEdit(p)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-red-600"
-                        onClick={() => handleDelete(p.uuid)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                  <TableCell className="text-zinc-500 font-medium">
+                    ₦ {(p.price * (p.current_stock ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-black"
+                          onClick={() => handleEdit(p)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-red-600"
+                          onClick={() => handleDelete(p.uuid)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

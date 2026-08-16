@@ -1,13 +1,14 @@
 from flask import Blueprint, request, jsonify
-from app.models.user import User, UserDetails, UserStatus, UserRole, Permission, UserPermission, UserPermissionStatus
+from app.models.user import User, UserDetails, UserStatus, Permission, UserPermission, UserPermissionStatus
 from app.extensions import db
 from flask_jwt_extended import jwt_required
+from app.utils.decorators import require_permission
 from datetime import datetime
 
 user_bp = Blueprint('users', __name__)
 
 @user_bp.route('/', methods=['GET'])
-@jwt_required()
+@require_permission('user:manage')
 def get_users():
     # Only return users that are NOT INACTIVE
     users = User.query.filter(User.status != UserStatus.INACTIVE).all()
@@ -17,7 +18,6 @@ def get_users():
         result.append({
             "uuid": user.uuid,
             "username": user.username,
-            "role": user.role.value if hasattr(user.role, 'value') else user.role,
             "status": user.status.value if hasattr(user.status, 'value') else user.status,
             "name": details.name if details else "",
             "phone": details.phone if details else "",
@@ -27,14 +27,13 @@ def get_users():
     return jsonify(result), 200
 
 @user_bp.route('/<uuid>', methods=['GET'])
-@jwt_required()
+@require_permission('user:manage')
 def get_user(uuid):
     user = User.query.get_or_404(uuid)
     details = user.details
     return jsonify({
         "uuid": user.uuid,
         "username": user.username,
-        "role": user.role.value if hasattr(user.role, 'value') else user.role,
         "status": user.status.value if hasattr(user.status, 'value') else user.status,
         "name": details.name if details else "",
         "phone": details.phone if details else "",
@@ -43,7 +42,7 @@ def get_user(uuid):
     }), 200
 
 @user_bp.route('/<uuid>', methods=['PUT'])
-@jwt_required()
+@require_permission('user:manage')
 def update_user(uuid):
     user = User.query.get_or_404(uuid)
     data = request.get_json()
@@ -55,12 +54,6 @@ def update_user(uuid):
 
     if 'password' in data and data['password']:
         user.set_password(data['password'])
-
-    if 'role' in data:
-        try:
-            user.role = UserRole(data['role'])
-        except ValueError:
-            return jsonify({"error": "Invalid role"}), 400
     
     if 'status' in data:
         try:
@@ -86,7 +79,7 @@ def update_user(uuid):
     return jsonify({"message": "User updated successfully"}), 200
 
 @user_bp.route('/<uuid>', methods=['DELETE'])
-@jwt_required()
+@require_permission('user:manage')
 def delete_user(uuid):
     user = User.query.get_or_404(uuid)
     
@@ -103,7 +96,7 @@ def delete_user(uuid):
     return jsonify({"message": "User deleted (made inactive) successfully"}), 200
 
 @user_bp.route('/<uuid>/permissions', methods=['GET'])
-@jwt_required()
+@require_permission('user:manage')
 def get_user_permissions(uuid):
     user = User.query.get_or_404(uuid)
     
@@ -124,7 +117,7 @@ def get_user_permissions(uuid):
     return jsonify(result), 200
 
 @user_bp.route('/<uuid>/permissions/<permission_uuid>', methods=['PUT'])
-@jwt_required()
+@require_permission('user:manage')
 def update_user_permission(uuid, permission_uuid):
     user = User.query.get_or_404(uuid)
     permission = Permission.query.get_or_404(permission_uuid)

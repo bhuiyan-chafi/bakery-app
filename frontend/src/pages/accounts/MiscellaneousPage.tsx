@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface MiscellaneousTransaction {
   uuid: string;
@@ -17,6 +18,9 @@ interface MiscellaneousTransaction {
 }
 
 export default function MiscellaneousPage() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canManage = hasPermission("account:manage");
+
   const [transactions, setTransactions] = useState<MiscellaneousTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,10 +32,13 @@ export default function MiscellaneousPage() {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}/miscellaneous`);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/miscellaneous`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to fetch transactions");
       const data = await res.json();
-      setTransactions(data);
+      setTransactions(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
       toast.error("Error fetching miscellaneous transactions");
@@ -41,8 +48,12 @@ export default function MiscellaneousPage() {
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, []);
+    if (canManage) {
+      fetchTransactions();
+    } else if (!isLoadingPermissions) {
+      setLoading(false);
+    }
+  }, [canManage, isLoadingPermissions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,9 +67,13 @@ export default function MiscellaneousPage() {
     }
 
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch(`${API_BASE_URL}/miscellaneous`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           transaction_type: type,
           transaction_on: note,
@@ -82,6 +97,15 @@ export default function MiscellaneousPage() {
       toast.error(error.message);
     }
   };
+
+  if (!isLoadingPermissions && !canManage) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to manage miscellaneous financial transactions.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

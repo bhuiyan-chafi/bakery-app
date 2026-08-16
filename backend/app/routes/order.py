@@ -3,6 +3,7 @@ import string
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from app.extensions import db
+from app.utils.decorators import require_permission
 
 order_bp = Blueprint('order', __name__)
 
@@ -56,6 +57,7 @@ def _serialize_order(order, include_items=False):
 
 # ── GET /orders/ ────────────────────────────────────────────────────────────
 @order_bp.route('/', methods=['GET'])
+@require_permission('order:view', 'order:manage')
 def get_orders():
     from app.models.order import Order
     limit = min(int(request.args.get('limit', 100)), 500)
@@ -65,6 +67,7 @@ def get_orders():
 
 # ── GET /orders/<uuid> ───────────────────────────────────────────────────────
 @order_bp.route('/<order_uuid>', methods=['GET'])
+@require_permission('order:view', 'order:manage')
 def get_order(order_uuid):
     from app.models.order import Order
     order = Order.query.get_or_404(order_uuid)
@@ -73,6 +76,7 @@ def get_order(order_uuid):
 
 # ── POST /orders/ ────────────────────────────────────────────────────────────
 @order_bp.route('/', methods=['POST'])
+@require_permission('order:view', 'order:manage', 'sale:view')
 def create_order():
     from app.models.order import Order, OrderItem, OrderType, OrderStatus, DiscountType
     from app.models.product import Product
@@ -160,12 +164,26 @@ def create_order():
     )
 
     db.session.add(order)
+    db.session.flush()
+
+    from app.models.product import ProductTransaction, ProductTransactionType
+    for item in order_items:
+        tx = ProductTransaction(
+            product_uuid=item.product_uuid,
+            order_uuid=order.uuid,
+            transaction_type=ProductTransactionType.OUT,
+            quantity=item.quantity,
+            notes=f"Order {order.order_number}"
+        )
+        db.session.add(tx)
+
     db.session.commit()
     return jsonify({"message": "Order created", "uuid": order.uuid, "order_number": order.order_number}), 201
 
 
 # ── PUT /orders/<uuid> ────────────────────────────────────────────────────────
 @order_bp.route('/<order_uuid>', methods=['PUT'])
+@require_permission('order:manage', 'sale:orders')
 def update_order(order_uuid):
     from app.models.order import Order, OrderStatus, OrderItem, DiscountType
     from app.models.product import Product
@@ -211,9 +229,12 @@ def update_order(order_uuid):
         if not items_data:
             return jsonify({"error": "At least one item is required"}), 400
 
-        # Remove old items
+        # Remove old items and old transactions
         for item in order.items:
             db.session.delete(item)
+        
+        from app.models.product import ProductTransaction, ProductTransactionType
+        ProductTransaction.query.filter_by(order_uuid=order.uuid).delete()
         
         # Build new items
         order_items = []
@@ -237,6 +258,15 @@ def update_order(order_uuid):
                 unit_price=price,
                 line_total=round(qty * price, 4),
             ))
+
+            tx = ProductTransaction(
+                product_uuid=product_uuid,
+                order_uuid=order.uuid,
+                transaction_type=ProductTransactionType.OUT,
+                quantity=qty,
+                notes=f"Order {order.order_number} (updated)"
+            )
+            db.session.add(tx)
 
         order.items = order_items
         order.subtotal = round(sum(i.line_total for i in order_items), 4)
@@ -273,6 +303,7 @@ def update_order(order_uuid):
 
 # ── DELETE /orders/<uuid> ─────────────────────────────────────────────────────
 @order_bp.route('/<order_uuid>', methods=['DELETE'])
+@require_permission('order:manage')
 def delete_order(order_uuid):
     from app.models.order import Order, OrderStatus
 
@@ -281,12 +312,16 @@ def delete_order(order_uuid):
     if order.status == OrderStatus.COMPLETE:
         return jsonify({"error": "Completed orders cannot be deleted"}), 403
 
+    from app.models.product import ProductTransaction
+    ProductTransaction.query.filter_by(order_uuid=order.uuid).delete()
+
     db.session.delete(order)
     db.session.commit()
     return jsonify({"message": "Order deleted"}), 200
 
 
 @order_bp.route('/stats/7days', methods=['GET'])
+@require_permission('order:view', 'order:manage')
 def get_orders_stats_7days():
     from app.models.order import Order, OrderStatus
     from datetime import datetime, timedelta
@@ -321,6 +356,7 @@ def get_orders_stats_7days():
 
 # ── GET /orders/my-deliveries ────────────────────────────────────────────────
 @order_bp.route('/my-deliveries', methods=['GET'], strict_slashes=False)
+@require_permission('sale:orders', 'order:view', 'order:manage')
 def get_my_deliveries():
     """Return delivery orders assigned to the given username, with items."""
     from app.models.order import Order, OrderType
@@ -338,11 +374,11 @@ def get_my_deliveries():
 
 # ── GET /orders/salesmen ─────────────────────────────────────────────────────
 @order_bp.route('/salesmen', methods=['GET'], strict_slashes=False)
+@require_permission('order:view', 'order:manage')
 def get_salesmen():
-    """Return all NORMAL + ACTIVE users available as delivery persons."""
-    from app.models.user import User, UserRole, UserStatus
+    """Return all ACTIVE users available as delivery persons."""
+    from app.models.user import User, UserStatus
     salesmen = User.query.filter_by(
-        role=UserRole.NORMAL,
         status=UserStatus.ACTIVE
     ).all()
     return jsonify([

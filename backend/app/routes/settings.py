@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.models.settings import UnitMeasurement
 from app.extensions import db
+from app.utils.decorators import require_permission
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -54,6 +55,7 @@ def delete_measurement_unit(uuid):
 # --- Permissions Management ---
 
 @settings_bp.route('/permissions', methods=['GET'])
+@require_permission('user:manage')
 def get_permissions():
     from app.models.user import Permission
     permissions = Permission.query.all()
@@ -63,6 +65,7 @@ def get_permissions():
     } for p in permissions]), 200
 
 @settings_bp.route('/permissions', methods=['POST'])
+@require_permission('user:manage')
 def add_permission():
     from app.models.user import Permission
     data = request.get_json()
@@ -82,6 +85,7 @@ def add_permission():
     return jsonify({"message": "Permission added successfully", "uuid": permission.uuid}), 201
 
 @settings_bp.route('/permissions/<uuid>', methods=['PUT'])
+@require_permission('user:manage')
 def update_permission(uuid):
     from app.models.user import Permission
     permission = Permission.query.get_or_404(uuid)
@@ -99,6 +103,7 @@ def update_permission(uuid):
     return jsonify({"message": "Permission updated successfully"}), 200
 
 @settings_bp.route('/permissions/<uuid>', methods=['DELETE'])
+@require_permission('user:manage')
 def delete_permission(uuid):
     from app.models.user import Permission, UserPermission
     permission = Permission.query.get_or_404(uuid)
@@ -122,13 +127,13 @@ def download_backup():
     from datetime import datetime
     from flask import send_file
     from flask_jwt_extended import get_jwt_identity
-    from app.models.user import User, UserRole
+    from app.models.user import User
 
-    # Verify admin role
+    # Verify user
     current_user_uuid = get_jwt_identity()
     user = User.query.get(current_user_uuid)
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({"error": "Only admins can download backups"}), 403
+    if not user:
+        return jsonify({"error": "User not found"}), 404
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"db_backup_{timestamp}.sql.gz"
@@ -155,13 +160,13 @@ def upload_backup():
     import subprocess
     from flask import request
     from flask_jwt_extended import get_jwt_identity
-    from app.models.user import User, UserRole
+    from app.models.user import User
 
-    # Verify admin role
+    # Verify user
     current_user_uuid = get_jwt_identity()
     user = User.query.get(current_user_uuid)
-    if not user or user.role != UserRole.ADMIN:
-        return jsonify({"error": "Only admins can restore backups"}), 403
+    if not user:
+        return jsonify({"error": "User not found"}), 404
 
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400

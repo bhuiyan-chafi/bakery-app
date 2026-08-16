@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.models.inventory import Inventory, InventoryTransaction, TransactionType, TransactionStatus
 from app.models.settings import UnitMeasurement
 from app.extensions import db
+from app.utils.decorators import require_permission
 from sqlalchemy import func
 
 inventory_bp = Blueprint('inventory', __name__)
@@ -9,6 +10,7 @@ inventory_bp = Blueprint('inventory', __name__)
 # --- Inventory Items ---
 
 @inventory_bp.route('/', methods=['GET'])
+@require_permission('inventory:view', 'inventory:add', 'inventory:view-purchase', 'inventory:manage-purchase')
 def get_inventory():
     items = Inventory.query.order_by(Inventory.name).limit(50).all()
     result = []
@@ -42,6 +44,7 @@ def get_inventory():
     return jsonify(result), 200
 
 @inventory_bp.route('/', methods=['POST'])
+@require_permission('inventory:add')
 def add_inventory():
     data = request.get_json()
     name = data.get('name')
@@ -63,6 +66,7 @@ def add_inventory():
     return jsonify({"message": "Inventory item added successfully", "uuid": item.uuid}), 201
 
 @inventory_bp.route('/<uuid>', methods=['PUT'])
+@require_permission('inventory:add')
 def update_inventory(uuid):
     item = Inventory.query.get_or_404(uuid)
     data = request.get_json()
@@ -81,6 +85,7 @@ def update_inventory(uuid):
     return jsonify({"message": "Inventory item updated successfully"}), 200
 
 @inventory_bp.route('/<uuid>', methods=['DELETE'])
+@require_permission('inventory:add')
 def delete_inventory(uuid):
     item = Inventory.query.get_or_404(uuid)
     db.session.delete(item)
@@ -91,6 +96,7 @@ def delete_inventory(uuid):
 # --- Inventory Transactions ---
 
 @inventory_bp.route('/transactions', methods=['GET'])
+@require_permission('inventory:view-purchase', 'inventory:manage-purchase')
 def get_transactions():
     transactions = InventoryTransaction.query.order_by(
         InventoryTransaction.datetime.desc()
@@ -115,6 +121,7 @@ def get_transactions():
     return jsonify(result), 200
 
 @inventory_bp.route('/transactions', methods=['POST'])
+@require_permission('inventory:manage-purchase')
 def add_transaction():
     data = request.get_json()
     inventory_uuid = data.get('inventory_uuid')
@@ -159,6 +166,7 @@ def add_transaction():
     return jsonify({"message": "Transaction recorded successfully", "uuid": transaction.uuid}), 201
 
 @inventory_bp.route('/transactions/<uuid>', methods=['PUT'])
+@require_permission('inventory:manage-purchase')
 def update_transaction(uuid):
     transaction = InventoryTransaction.query.get_or_404(uuid)
     data = request.get_json()
@@ -195,6 +203,7 @@ def update_transaction(uuid):
     return jsonify({"message": "Transaction updated successfully"}), 200
 
 @inventory_bp.route('/transactions/<uuid>', methods=['DELETE'])
+@require_permission('inventory:manage-purchase')
 def delete_transaction(uuid):
     transaction = InventoryTransaction.query.get_or_404(uuid)
     db.session.delete(transaction)

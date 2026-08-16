@@ -11,9 +11,10 @@ interface UserPermissionView {
 
 interface UserPermissionsCardProps {
   userId: string; // "me" or a UUID
+  onUpdate?: () => void;
 }
 
-export default function UserPermissionsCard({ userId }: UserPermissionsCardProps) {
+export default function UserPermissionsCard({ userId, onUpdate }: UserPermissionsCardProps) {
   const [permissions, setPermissions] = useState<UserPermissionView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -65,6 +66,7 @@ export default function UserPermissionsCard({ userId }: UserPermissionsCardProps
         p.permission_uuid === permUuid ? { ...p, active: !currentActive } : p
       ));
       toast.success("Permission updated");
+      if (onUpdate) onUpdate();
     } catch (err: any) {
       toast.error(err.message);
     }

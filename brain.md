@@ -226,3 +226,165 @@ Fix @MyDeliveriesPage.tsx
 ### Changing the Currency Symbol
 
 The application is running in Nigeria. The symbol is Naira there. I want you to look every frontend page in "frontend/src/pages" to find the dollar symbols and then change it with Naira.
+
+### Bringing the Recipe in the Sidebar
+
+If you have a look at the @ProductPage.tsx you will find the "recipe" menu is under the action column for each product. The client wants to move it to the sidebar. But there is a problem:
+
+- if we move it to the sidebar, we have to select the product from a drop-down because recipe is product wise.
+
+Now, we already have a page for the recipe which is @ProductRecipe.tsx. But page takes the product before hand. We can reuse this page by adding a logic.
+
+- if I go from product page then I already have to product
+- if I am going from the sidebar then the product is missing, in that case I can display the drop-down to select the product.
+
+### Recipe Based Production
+
+So, we have decided on the final change. Right now the production is made based on products. For example all the products in @product.py is expected to have a recipe and then production. But in real scenario its different. What they do is: they make a production based on a recipe and then creates end products. For example they produce a Recipe called "Yummy Bread" then they cut the loaves into three different products: family, big and small. But each of them are different products with different inventory and price. So, here is what we have to do:
+
+- we have to remove the production and recipe option under the Action column in @ProductPage.tsx
+- then we have to remove the corresponding routes and functions to clean up
+
+- next we have to remove the product id from the Recipe model in @product.py because recipe is going to be standalone
+- after removing the product connectivity we have to modify the @RecipePage.tsx page to remove the product drop down.
+- also remove the route and necessary dom elements, functions
+- clicking on the recipe page should take us to the recipe page where I will see a list of recipes in the system.
+- under the action menu: view, edit, delete
+- on top right I will have the add new recipe option
+- clicking the button will bring the modal where I will have the add new recipe form
+- rest of the things can remain
+
+Next the production will take place based on Recipe instead of products. So:
+
+- we have to modify the model Production to remove the product ID and keep the recipe id only
+- which leads cleaning the routes and functions
+- then in the @Productproduction.tsx page we have to remove the option to select a product before going to the main page.
+- selecting the option Producton should take me directly in the production page.
+
+Next we have to remove the "Batch Quantity" field from the form. The steps will be:
+
+- I will select the recipe and then start the production
+- I will have the same phases for the production: start, complete
+- the complete status must change to finish
+- once I select finish a new block should appear below:
+  -- I will select a product from the drop-down and then write quntity of that product there
+  -- which means I have to modify the @product.py "ProductTransaction" class to add the recipe id
+  -- from the @product.py we have to remove "batch_quantity, damaged_quantity"
+  -- once I click complete (the final status on the bottom right corner in the block)
+  -- each product transaction will be added, the production id should also be recorded
+
+### Total Amount of the Current Stock
+
+If you check the @ProductPage.tsx you will see we have unit price and total unit available. My client wants:
+
+- another column after the Current Stock as "Total Amount"
+- the value will be Price\*Current Stock
+
+### Highlight the stock in OrderPage
+
+Check the @OrderPage.tsx where we have the "Select Product" option. Once we click, it shows the available stock. But the color is in grey. My client:
+
+- wants to change the color to green if its above "alert quantity" amount
+- make it red if its equal or below the alert quantity amount
+
+### Products Stock are not reduced after the sell
+
+If I complete the sell from the order page. The product stock must reduce. Isnt it? But it is not changing. Can you check the reason?
+
+### Currency Format
+
+If you see the [InventoryManage.tsx](file;file:///home/chafi/bakery-app/frontend/src/pages/inventory/InventoryManage.tsx) page, the amount is shown in a format like this: 30000.00. The client wants it to display like this: 30,000.00. So there will be a comma after each thousand, millions, billions.
+
+### Permission Based Access Control
+
+Right now in the application, I have roles for each users. But I want to go permission based acess control. So, I have to change a few things within the application.
+
+1. Remove the UserRole enums and fields from @user.py
+2. Remove codes that relates the "roles" from @user.py
+3. Remove the Approved status from the UserStatus in @user.py and then check the routes and @auth.py for any connectivity. The "Active" Status should replace all "Approved" values.
+4. Now that we have removed the "roles", the items on the @Sidebar.tsx is not visible for any user. Right now I cannot see any of them. But it should be visible for all users. All user should see everything. Remove any role based filtering.
+5. Remove the role based information from @Settings.tsx
+
+Now I will implement permission based access controll. Let's create one permission and implement it to test.
+
+1. The models are defined in @user.py
+2. I will create a permission "user:manage"
+3. The user with this permission will be able see and operate the "User Management" block in @SettingsPage.tsx
+
+Right now the "Your Permissions" block is visible to every one. This will enable self permission enabling to all users, which is not the goal. Only a specific user who has the permission "user:manage" can work on this feature. Now, there could be an issue while deploying an issue because the user should be pre defined with this permission. So, we can take these steps:
+
+1. Bring the "Your Permissions" block under specific permission in @SettingsPage.tsx
+2. While the app is deployed we can create this permission and add it to the admin so that he can start assigning permissions. For this initialization you can check @entrypoint.sh
+3. The same permission should be assigned to "Permissions Management" feature in @SettingsPage.tsx
+
+In the @SettingsPage.tsx we can set the permission from the user edit button. But the option is also visble beside the user details. I think this is redundent. Instead we can do this:
+
+1. Remove the "You Permissions" block
+2. Make the "User Profile" section full width
+3. Add a section within "User Profile" section as "You Permissions", where we will only display the list of permissions assigned to this user. Display the list horizontally so that it doesnt take too much vertical space.
+
+#### Product Permissions
+
+I have already created two permissions:
+
+- product:view
+- product:manage
+- users with "product:view" can see the option "Products" in @Sidebar.tsx and the content in the @ProductPage.tsx
+- users with "product:manage" can perform action on the "edit, delete" operations.
+- the same permission will be applied for the "Product Categories". Who can view, manage Product can also manage its categories. Thats why I am not creating any separate permissions.
+
+#### Recipe Permissions
+
+I have already created two permissions:
+
+- recipe:view
+- recipe:manage
+- users with "recipe:view" can see the option "Recipes" in @Sidebar.tsx and the content in the @ProductRecipe.tsx
+- users with "recipe:manage" can perform action on the "edit, delete" operations.
+
+#### Production Permissions
+
+I have already created two permissions:
+
+- production:view
+- production:manage
+- users with "production:view" can see the option "Production" in @Sidebar.tsx and the content in the @ProductProduction.tsx
+- users with "production:manage" can perform action on the "Start Production" which is on top right on the page. And then "start, finish, complete, and delete" operations for each productions.
+
+#### Inventory Permissions
+
+I have created the following permissions:
+
+- "inventory:view", with the permission the user can see the option "Invetory" on the @Sidebar and the list of items on the @InventoryPage.tsx
+- "inventory:add", with this permission the user can add a new item using the button "Add Item" button on top left section of in @InventoryPage.tsx
+- "inventory:view-purchase", with this permission the user can access "Manage Inventory" feature that leads to the @InventoryManage.tsx
+- "inventory:manage-purchase", with this permission the user can create, edit, and delete new purchase.
+
+#### Order Permissions
+
+Before we work on the Order page permissions, we have to fix the issue of product loading on the page. Since we have added permission on the products, they are not loaded on the @OrderPage.tsx.
+
+Then I have added the following permissions and added to the user admin:
+
+- order:view Can see the POS and place orders in @Sidebar.tsx and @OrderPage.tsx
+- order:manage Can manage existing orders in @OrderManage.tsx
+
+#### Accounts Permissions
+
+Then I have added the following permissions and added to the user admin:
+
+- account:view Can generate the Account Reports by accessing the option Accounts on @Sidebar.tsx
+- account:manage Can add, edit, delete financial transactions by accessing the option "Miscellaneous" from top left corner in @AccountsPage.tsx
+
+#### Sale Permissions
+
+Before we work on the Order page permissions, we have to fix the issue of product loading on the page. Since we have added permission on the products, they are not loaded on the @SalesPage.tsx.
+
+Then I have added the following permissions and added to the user admin:
+
+- sale:view Can see the POS and make sales in @Sidebar.tsx and @SalesPage.tsx
+- sale:orders Can access the option "My Orders" on @Sidebar.tsx
+
+### Settings
+
+Can we fix the "Settings" option where we have the text "v1.0.0.0 stable"?

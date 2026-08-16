@@ -2,15 +2,18 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 from app.models.miscellaneous import MiscellaneousTransaction
 from app.extensions import db
+from app.utils.decorators import require_permission
 
 miscellaneous_bp = Blueprint('miscellaneous', __name__)
 
 @miscellaneous_bp.route('', methods=['GET'], strict_slashes=False)
+@require_permission('account:manage')
 def get_miscellaneous_transactions():
     transactions = MiscellaneousTransaction.query.order_by(MiscellaneousTransaction.created_at.desc()).all()
     return jsonify([t.to_dict() for t in transactions]), 200
 
 @miscellaneous_bp.route('', methods=['POST'], strict_slashes=False)
+@require_permission('account:manage')
 def add_miscellaneous_transaction():
     data = request.get_json()
     transaction_type = data.get('transaction_type')

@@ -7,10 +7,12 @@ from app.models.order import Order, OrderStatus
 from sqlalchemy import func
 import uuid
 from app.extensions import db
+from app.utils.decorators import require_permission
 
 accounts_bp = Blueprint('accounts', __name__)
 
 @accounts_bp.route('/transactions', methods=['GET'], strict_slashes=False)
+@require_permission('account:view', 'account:manage')
 def get_account_transactions():
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')

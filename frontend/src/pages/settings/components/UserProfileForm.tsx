@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User as UserIcon } from "lucide-react";
+import { User as UserIcon, Shield } from "lucide-react";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "@/config/constants";
 import { useNavigate } from "react-router-dom";
@@ -20,11 +20,11 @@ export default function UserProfileForm({ userId, onUpdate }: UserProfileFormPro
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [permissions, setPermissions] = useState<{ permission_uuid: string; name: string }[]>([]);
 
   const isMe = userId === "me";
 
@@ -61,11 +61,20 @@ export default function UserProfileForm({ userId, onUpdate }: UserProfileFormPro
         
         const data = await res.json();
         setUsername(data.username);
-        setRole(data.role);
         setStatus(data.status);
         setName(data.name || "");
         setPhone(data.phone || "");
         setAddress(data.address || "");
+
+        // Fetch assigned permissions
+        const permEndpoint = isMe ? `${API_BASE_URL}/auth/me/permissions` : `${API_BASE_URL}/users/${userId}/permissions`;
+        const permRes = await fetch(permEndpoint, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (permRes.ok) {
+          const permData: { permission_uuid: string; name: string; active: boolean }[] = await permRes.json();
+          setPermissions(permData.filter(p => p.active));
+        }
       } catch (err: any) {
         toast.error(err.message);
       } finally {
@@ -101,9 +110,8 @@ export default function UserProfileForm({ userId, onUpdate }: UserProfileFormPro
         payload.password = password;
       }
 
-      // If not editing "me", we allow role and status editing
+      // If not editing "me", we allow status editing
       if (!isMe) {
-        payload.role = role;
         payload.status = status;
       }
 
@@ -149,7 +157,7 @@ export default function UserProfileForm({ userId, onUpdate }: UserProfileFormPro
         </div>
         <div>
           <h2 className="font-semibold text-zinc-900">{isMe ? "User Profile" : "Edit User"}</h2>
-          <p className="text-xs text-zinc-500">{isMe ? "Update your account details and password" : "Update user details, role, and status"}</p>
+          <p className="text-xs text-zinc-500">{isMe ? "Update your account details and password" : "Update user details and status"}</p>
         </div>
       </div>
       
@@ -199,46 +207,46 @@ export default function UserProfileForm({ userId, onUpdate }: UserProfileFormPro
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                {!isMe ? (
-                   <select 
-                    value={role} 
-                    onChange={(e) => setRole(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="manager">Manager</option>
-                    <option value="staff">Staff</option>
-                    <option value="normal">Normal</option>
-                  </select>
-                ) : (
-                  <div className="h-9 px-3 flex items-center rounded-md border bg-zinc-50 text-sm text-zinc-500 capitalize cursor-not-allowed">
-                    {role || "Unknown"}
-                  </div>
-                )}
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              {!isMe ? (
+                 <select 
+                  value={status} 
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="pending">Pending</option>
+                </select>
+              ) : (
+                <div className="h-9 px-3 flex items-center rounded-md border bg-zinc-50 text-sm text-zinc-500 capitalize cursor-not-allowed">
+                  {status || "Unknown"}
+                </div>
+              )}
+            </div>
+
+            {/* Permissions summary */}
+            <div className="pt-4 mt-4 border-t">
+              <div className="flex items-center gap-2 mb-2.5">
+                <Shield className="w-4 h-4 text-zinc-500" />
+                <h3 className="text-sm font-medium">{isMe ? "Your Permissions" : "Assigned Permissions"}</h3>
               </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                {!isMe ? (
-                   <select 
-                    value={status} 
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="suspended">Suspended</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                  </select>
-                ) : (
-                  <div className="h-9 px-3 flex items-center rounded-md border bg-zinc-50 text-sm text-zinc-500 capitalize cursor-not-allowed">
-                    {status || "Unknown"}
-                  </div>
-                )}
-              </div>
+              {permissions.length === 0 ? (
+                <p className="text-xs text-zinc-400 italic">No active permissions assigned.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {permissions.map((perm) => (
+                    <span
+                      key={perm.permission_uuid}
+                      className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-zinc-100 text-zinc-800 border border-zinc-200"
+                    >
+                      {perm.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="pt-4 mt-4 border-t">

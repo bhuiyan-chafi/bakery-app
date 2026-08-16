@@ -37,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface InventoryItem {
   uuid: string;
@@ -54,6 +55,11 @@ interface UnitMeasurement {
 }
 
 export default function InventoryPage() {
+  const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canView = hasAnyPermission("inventory:view", "inventory:add", "inventory:view-purchase", "inventory:manage-purchase");
+  const canAdd = hasPermission("inventory:add");
+  const canViewPurchase = hasAnyPermission("inventory:view-purchase", "inventory:manage-purchase");
+
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [units, setUnits] = useState<UnitMeasurement[]>([]);
   const [filteredUnits, setFilteredUnits] = useState<UnitMeasurement[]>([]);
@@ -70,16 +76,23 @@ export default function InventoryPage() {
   const [quantityAlert, setQuantityAlert] = useState<string>("0");
 
   useEffect(() => {
-    fetchItems();
-    fetchUnits();
-  }, []);
+    if (canView) {
+      fetchItems();
+      fetchUnits();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canView, isLoadingPermissions]);
 
   const fetchItems = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/inventory/`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/inventory/`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch inventory");
       const data = await response.json();
-      setItems(data);
+      setItems(Array.isArray(data) ? data : []);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -89,11 +102,15 @@ export default function InventoryPage() {
 
   const fetchUnits = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/settings/measurement-unit`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/settings/measurement-unit`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch measurement units");
       const data = await response.json();
-      setUnits(data);
-      setFilteredUnits(data);
+      const unitList = Array.isArray(data) ? data : [];
+      setUnits(unitList);
+      setFilteredUnits(unitList);
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -133,6 +150,7 @@ export default function InventoryPage() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const url = editUuid
         ? `${API_BASE_URL}/inventory/${editUuid}`
         : `${API_BASE_URL}/inventory/`;
@@ -140,7 +158,10 @@ export default function InventoryPage() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           name,
           unit_uuid: selectedUnitUuid,
@@ -177,8 +198,10 @@ export default function InventoryPage() {
   const handleDelete = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this inventory item?")) return;
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/inventory/${uuid}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) {
         const data = await response.json();
@@ -190,6 +213,15 @@ export default function InventoryPage() {
       toast.error(error.message);
     }
   };
+
+  if (!isLoadingPermissions && !canView) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to view inventory.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -203,26 +235,29 @@ export default function InventoryPage() {
 
         {/* Action buttons row */}
         <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/inventory/manage" className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4" />
-              Manage Inventory
-            </Link>
-          </Button>
+          {canViewPurchase && (
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link to="/inventory/manage" className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" />
+                Manage Inventory
+              </Link>
+            </Button>
+          )}
 
-          <Dialog
-            open={isModalOpen}
-            onOpenChange={(open) => {
-              setIsModalOpen(open);
-              if (!open) resetForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button className="bg-black text-white hover:bg-zinc-800">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Item
-              </Button>
-            </DialogTrigger>
+          {canAdd && (
+            <Dialog
+              open={isModalOpen}
+              onOpenChange={(open) => {
+                setIsModalOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button className="bg-black text-white hover:bg-zinc-800">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Item
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
                 <DialogTitle>{editUuid ? "Edit Item" : "Add New Item"}</DialogTitle>
@@ -311,6 +346,7 @@ export default function InventoryPage() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -323,20 +359,20 @@ export default function InventoryPage() {
               <TableHead className="font-medium">Unit</TableHead>
               <TableHead className="font-medium">Stock</TableHead>
               <TableHead className="font-medium">Alert Qty</TableHead>
-              <TableHead className="text-right font-medium">Action</TableHead>
+              {canAdd && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={canAdd ? 5 : 4} className="text-center py-10 text-muted-foreground italic">
                   Loading inventory...
                 </TableCell>
               </TableRow>
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
-                  No inventory items found. Click "Add Item" to get started.
+                <TableCell colSpan={canAdd ? 5 : 4} className="text-center py-10 text-muted-foreground italic">
+                  No inventory items found. {canAdd ? 'Click "Add Item" to get started.' : ''}
                 </TableCell>
               </TableRow>
             ) : (
@@ -353,26 +389,28 @@ export default function InventoryPage() {
                     </span>
                   </TableCell>
                   <TableCell className="text-zinc-500">{item.quantity_alert}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-black"
-                        onClick={() => handleEdit(item)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-zinc-500 hover:text-red-600"
-                        onClick={() => handleDelete(item.uuid)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+                  {canAdd && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-black"
+                          onClick={() => handleEdit(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-zinc-500 hover:text-red-600"
+                          onClick={() => handleDelete(item.uuid)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}
