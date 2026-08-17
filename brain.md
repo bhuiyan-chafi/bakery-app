@@ -388,3 +388,10 @@ Then I have added the following permissions and added to the user admin:
 ### Settings
 
 Can we fix the "Settings" option where we have the text "v1.0.0.0 stable"?
+
+### Fixing the Dashboard
+
+Let's fix the dashboard items. After putting all the permissions, the items on the dashboard is not visible anymore.
+
+- check the page @DashboardPage.tsx
+- the "My Delivery Stats" on @Dashboard.tsx will be visible with "sale:orders" only
