@@ -12,6 +12,9 @@ def create_app():
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-dev-secret-key')
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 86400  # 24 hours
 
+    # Nigeria timezone (WAT = UTC+1)
+    os.environ.setdefault('TZ', 'Africa/Lagos')
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
@@ -30,6 +33,7 @@ def create_app():
     from app.routes.user import user_bp
     from app.routes.miscellaneous import miscellaneous_bp
     from app.routes.accounts import accounts_bp
+    from app.routes.attendance import attendance_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
@@ -41,6 +45,7 @@ def create_app():
     app.register_blueprint(order_bp, url_prefix='/api/orders')
     app.register_blueprint(miscellaneous_bp, url_prefix='/api/miscellaneous')
     app.register_blueprint(accounts_bp, url_prefix='/api/accounts')
+    app.register_blueprint(attendance_bp, url_prefix='/api/attendance')
 
     # Import all models so Alembic can detect them for migrations
     from app.models import user, product, settings, inventory, order, miscellaneous  # noqa: F401
@@ -62,7 +67,9 @@ def create_app():
             'inventory:view-purchase', 'inventory:manage-purchase',
             'order:view', 'order:manage',
             'account:view', 'account:manage',
-            'sale:view', 'sale:orders'
+            'sale:view', 'sale:orders',
+            'settings:measurement-unit',
+            'staff:view', 'staff:edit', 'staff:management'
         ]
         perm_objects = {}
         for perm_name in initial_perms:

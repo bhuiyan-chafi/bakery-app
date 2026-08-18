@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import UserProfileForm from "./components/UserProfileForm";
 import UserPermissionsCard from "./components/UserPermissionsCard";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface UserListItem {
   uuid: string;
@@ -29,9 +30,12 @@ interface UserListItem {
 }
 
 export default function SettingsPage() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canManageUsers = hasPermission("user:manage");
+  const canManageMeasurementUnits = hasPermission("settings:measurement-unit");
+
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-  const [canManageUsers, setCanManageUsers] = useState(false);
   
   const [editUserUuid, setEditUserUuid] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -40,31 +44,6 @@ export default function SettingsPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  const fetchMyPermissions = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const res = await fetch(`${API_BASE_URL}/auth/me/permissions`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      
-      if (res.ok) {
-        const perms: { name: string; active: boolean }[] = await res.json();
-        const hasUserManage = perms.some(p => p.name === 'user:manage' && p.active);
-        setCanManageUsers(hasUserManage);
-        if (hasUserManage) {
-          fetchUsers();
-        } else {
-          setUsers([]);
-          setIsLoadingUsers(false);
-        }
-      }
-    } catch (err: any) {
-      console.error("Failed to load permissions", err);
-    }
-  };
 
   const fetchUsers = async () => {
     try {
@@ -77,7 +56,7 @@ export default function SettingsPage() {
       
       if (res.ok) {
         const data = await res.json();
-        setUsers(data);
+        setUsers(Array.isArray(data) ? data : []);
       }
     } catch (err: any) {
       toast.error("Failed to load users");
@@ -87,8 +66,13 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    fetchMyPermissions();
-  }, []);
+    if (canManageUsers) {
+      fetchUsers();
+    } else if (!isLoadingPermissions) {
+      setUsers([]);
+      setIsLoadingUsers(false);
+    }
+  }, [canManageUsers, isLoadingPermissions]);
 
   const handleEditUser = (uuid: string) => {
     setEditUserUuid(uuid);
@@ -138,12 +122,14 @@ export default function SettingsPage() {
             </Link>
           </Button>
         )}
-        <Button asChild variant="outline" size="sm" className="h-9">
-          <Link to="/settings/measurement-unit" className="flex items-center gap-2">
-            <Scale className="w-4 h-4" />
-            Measurement Units
-          </Link>
-        </Button>
+        {canManageMeasurementUnits && (
+          <Button asChild variant="outline" size="sm" className="h-9">
+            <Link to="/settings/measurement-unit" className="flex items-center gap-2">
+              <Scale className="w-4 h-4" />
+              Measurement Units
+            </Link>
+          </Button>
+        )}
         <div className="flex-1"></div>
         <Button variant="outline" size="sm" className="h-9 flex items-center gap-2" onClick={() => setIsUploadModalOpen(true)}>
           <Upload className="w-4 h-4" />

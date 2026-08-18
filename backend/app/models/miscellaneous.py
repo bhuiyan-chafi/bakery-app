@@ -8,7 +8,7 @@ class MiscellaneousTransaction(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     uuid = db.Column(db.String(36), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
     transaction_type = db.Column(db.String(50), nullable=False) # 'income' or 'expense'
-    transaction_on = db.Column(db.String(15), nullable=False)
+    transaction_on = db.Column(db.String(100), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     transaction_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

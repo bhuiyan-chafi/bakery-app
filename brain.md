@@ -395,3 +395,90 @@ Let's fix the dashboard items. After putting all the permissions, the items on t
 
 - check the page @DashboardPage.tsx
 - the "My Delivery Stats" on @Dashboard.tsx will be visible with "sale:orders" only
+
+### Measurement Units
+
+Next, we have to set permission for the measurement unit management in @SettingsPage.tsx. I have created:
+
+- settings:measurement-unit, permission and assigned it to current admin user
+- implement the permission
+
+### Staff Management
+
+Now we are going to implement the staff management part in the system. The feature is very simple. So, lets go step by step:
+
+1. Option in the @Sidebar.tsx
+
+I want to create a menu as "Staff Management" on the @Sidebar.tsx. Then:
+
+- clickin the menu will take me to the StaffManagement.tsx page where all the users will be listed except the user with username "admin".
+- on the table the following information will be displayed in each column: Name, Phone, Last Attended (no data for now), Action
+- the information will be fetched from the @user.py model
+- under the Action column there will be edit button.
+
+Finish this then we will develop the edit option.
+
+#### Edit Staff Information
+
+The edit page will have two sections side by side:
+
+- on the left side we will have the basic information that is related to the @user.py model: name, phone and address.
+- on the right we need another section to bring this feature:
+- - an input field labeled as "Field Title" and then a input field with placeholder "IBAN", and then another input field labeled as "Field Value" with placeholder "NG-xxx-xxxx-xxxx"
+- - a button to submit
+- this information will go to a new model which can be created as "user_other_information" where we will put dynamic key value pairs
+- then below these two sections we will display all the key value pairs for this staff.
+
+#### Attendance Column
+
+Then I want a new column after Last Attended and before Action column as "Attendance". On that column for each user:
+
+- the first button will be displayed as "clock-in" for that day. So the system will check first if there is an entry for that user. But where to check? Let me tell you the plan then we can design the model together.
+- once the "clock in" button is pressed, it goes away and we have 3 new buttons: "excused, not-excused, half-day, clock-out". These are basically the types. But what do they mean?
+- - clock in starts the day for a staff
+- - excused means he finished before time but it is counted as whole day
+- - not excused means he started but left without informing so the day is not counted
+- - half day means counted as half day
+- - clock out means the full day
+- clicking any of these buttons except "clock-out" will trigger a note on an overlay modal where the admin will put something (why they finished early) and then submit.
+- so the plan could be: clock-in will make an entry in the database with working day as 0. Then excused, clock-out will update it as 1. Excused will take the note as well.
+- half day will update it as 0.5 with a note and clock-out will make it 1.
+- not-excused will keep it 0 with a note
+- and the column "Last Atteneded" is basically the last entry date in that database which indicates when he worked last.
+
+#### View Attendance
+
+Next I want to display the attedance information. I want:
+
+- a button beside "edit" button which will take me to the "ViewAttendance" page.
+- by default the system will fetch records of last 7 days
+- on top of that table there will be a date range selector to load custom range records.
+- based on the displayed record there will be a last row which will calculate number of days worked within that range.
+
+#### Permissions
+
+Next we have to add the permissions to each of these features. Let's start with:
+
+- staff:view, can view the option "Staff Management" on side bar and see the list of staff.
+- staff:edit, edit the staff information
+- staff:management, can take the attendance. This means you can hide the whole column for the user who doesnt have this permission.
+- the calender button under the action column is also connected to "staff:management" permission.
+
+**_Bug_**:
+
+- if I turn off "staff:management" permission it is not loading any data at all. But it should only hide the Attendance column. The user can see the list of staff.
+
+#### Salaries
+
+Then there will be a third button under the action column with icon "naira currency" which will take me to a new page StaffSalaryManagement.tsx and fetch records from the model @miscellaneous.py with type expense and "etransaction_on" 'employee_uuid:salary:date".
+
+Above the table we will have a form which will have month year calender to select a month with a year. Then clicking the button "Filter" will check in the database if the salary has been settled for that month.
+
+If no record is found, the system will give me a input field to specify the amount. The entry will be recorded in the system exactly in this format for the "transaction_on" field: 'employee_uuid:salary:date", so that we can filter it in the earlier step.
+
+**_Chanages_**:
+
+- first change I want is to make the "Check Salary Status" full width.
+- Second, I noticed that selecting the month automatically triggers the filter, in that case do I need the "Filter" button?
+- in the @AccountsPage.tsx if I chage the type "Income/Expense/Profit" it changes the titles of the table and currency color before I press "Search" button. This can be confusig for the user.
+- can you format the amount in this manner 25000 to 25,000.00

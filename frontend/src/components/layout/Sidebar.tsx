@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ShoppingBasket, Package, ClipboardList,
-  Settings, Wallet, ShoppingBag, X, PanelLeftClose, Truck, ChefHat, Factory,
+  Settings, Wallet, ShoppingBag, X, PanelLeftClose, Truck, ChefHat, Factory, Users,
 } from "lucide-react";
 import { APP_NAME } from "@/config/constants";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -17,6 +17,7 @@ const menuItems = [
   { label: "Sale",       icon: ShoppingBag,      path: "/sale", permissions: ["sale:view"] },
   { label: "My Orders",  icon: Truck,            path: "/my-orders", permissions: ["sale:orders"] },
   { label: "Accounts",   icon: Wallet,           path: "/accounts", permissions: ["account:view", "account:manage"] },
+  { label: "Staff Management", icon: Users,      path: "/staff", permissions: ["staff:view"] },
 ];
 
 interface SidebarProps {

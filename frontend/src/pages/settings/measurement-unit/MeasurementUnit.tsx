@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface UnitMeasurement {
   uuid: string;
@@ -31,6 +32,9 @@ interface UnitMeasurement {
 }
 
 export default function MeasurementUnit() {
+  const { hasPermission, isLoading: isLoadingPermissions } = usePermissions();
+  const canManage = hasPermission("settings:measurement-unit");
+
   const [units, setUnits] = useState<UnitMeasurement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,15 +46,22 @@ export default function MeasurementUnit() {
   const [measurement, setMeasurement] = useState("");
 
   useEffect(() => {
-    fetchUnits();
-  }, []);
+    if (canManage) {
+      fetchUnits();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canManage, isLoadingPermissions]);
 
   const fetchUnits = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/settings/measurement-unit`);
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/settings/measurement-unit`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error("Failed to fetch measurement units");
       const data = await response.json();
-      setUnits(data);
+      setUnits(Array.isArray(data) ? data : []);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -73,6 +84,7 @@ export default function MeasurementUnit() {
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem("token");
       const url = editUuid
         ? `${API_BASE_URL}/settings/measurement-unit/${editUuid}`
         : `${API_BASE_URL}/settings/measurement-unit`;
@@ -80,7 +92,10 @@ export default function MeasurementUnit() {
 
       const response = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({ name, measurement }),
       });
 
@@ -110,8 +125,10 @@ export default function MeasurementUnit() {
   const handleDelete = async (uuid: string) => {
     if (!confirm("Are you sure you want to delete this unit?")) return;
     try {
+      const token = localStorage.getItem("token");
       const response = await fetch(`${API_BASE_URL}/settings/measurement-unit/${uuid}`, {
         method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) {
         const data = await response.json();
@@ -123,6 +140,15 @@ export default function MeasurementUnit() {
       toast.error(error.message);
     }
   };
+
+  if (!isLoadingPermissions && !canManage) {
+    return (
+      <div className="p-8 text-center bg-white rounded-lg border shadow-sm">
+        <h2 className="text-lg font-medium text-zinc-900 mb-1">Access Restricted</h2>
+        <p className="text-sm text-zinc-500">You do not have permission to manage measurement units.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

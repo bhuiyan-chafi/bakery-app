@@ -24,8 +24,8 @@ def add_miscellaneous_transaction():
     if not transaction_type or not transaction_on or amount is None or not transaction_date_str:
         return jsonify({"error": "Missing required fields"}), 400
 
-    if len(transaction_on) > 15:
-        return jsonify({"error": "Transaction Note cannot exceed 15 characters"}), 400
+    if len(transaction_on) > 100:
+        return jsonify({"error": "Transaction Note cannot exceed 100 characters"}), 400
 
     if transaction_type not in ['income', 'expense']:
         return jsonify({"error": "Transaction type must be 'income' or 'expense'"}), 400

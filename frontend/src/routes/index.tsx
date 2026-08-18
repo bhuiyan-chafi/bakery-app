@@ -8,6 +8,7 @@ import { settingsRoutes } from './settingsRoutes';
 import { orderRoutes } from './orderRoutes';
 import { accountRoutes } from './accountRoutes';
 import { salesRoutes } from './salesRoutes';
+import { staffRoutes } from './staffRoutes';
 
 const router = createBrowserRouter([
   ...publicRoutes,
@@ -19,6 +20,7 @@ const router = createBrowserRouter([
   ...orderRoutes,
   ...accountRoutes,
   ...salesRoutes,
+  ...staffRoutes,
 ]);
 
 export default router;

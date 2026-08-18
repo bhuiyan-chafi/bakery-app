@@ -77,3 +77,48 @@ class UserPermission(db.Model):
 
     def __repr__(self):
         return f'<UserPermission {self.user_uuid} - {self.permission_uuid}>'
+
+
+class UserOtherInformation(db.Model):
+    __tablename__ = 'user_other_information'
+
+    uuid = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_uuid = db.Column(db.String(36), db.ForeignKey('users.uuid'), nullable=False)
+    field_title = db.Column(db.String(100), nullable=False)
+    field_value = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('other_information', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<UserOtherInformation {self.user_uuid}: {self.field_title}>'
+
+
+class AttendanceStatus(Enum):
+    CLOCKED_IN   = 'clocked_in'
+    EXCUSED      = 'excused'
+    NOT_EXCUSED  = 'not_excused'
+    HALF_DAY     = 'half_day'
+    CLOCKED_OUT  = 'clocked_out'
+
+
+class StaffAttendance(db.Model):
+    __tablename__ = 'staff_attendance'
+    __table_args__ = (
+        db.UniqueConstraint('user_uuid', 'date', name='uq_attendance_user_date'),
+    )
+
+    uuid           = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_uuid      = db.Column(db.String(36), db.ForeignKey('users.uuid'), nullable=False)
+    date           = db.Column(db.Date, nullable=False)  # WAT date
+    status         = db.Column(db.Enum(AttendanceStatus), default=AttendanceStatus.CLOCKED_IN, nullable=False)
+    working_day    = db.Column(db.Float, default=0.0, nullable=False)  # 0.0 | 0.5 | 1.0
+    note           = db.Column(db.Text, nullable=True)
+    clocked_in_at  = db.Column(db.DateTime, nullable=True)
+    resolved_at    = db.Column(db.DateTime, nullable=True)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('attendance_records', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<StaffAttendance {self.user_uuid} {self.date} {self.status.value}>'

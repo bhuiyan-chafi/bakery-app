@@ -26,6 +26,7 @@ export default function AccountsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [type, setType] = useState("expense");
+  const [searchedType, setSearchedType] = useState("expense");
   const [transactions, setTransactions] = useState<AccountTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -39,6 +40,7 @@ export default function AccountsPage() {
     try {
       setLoading(true);
       setHasSearched(true);
+      setSearchedType(type);
       const token = localStorage.getItem("token");
       const res = await fetch(
         `${API_BASE_URL}/accounts/transactions?start_date=${startDate}&end_date=${endDate}&type=${type}`,
@@ -58,7 +60,7 @@ export default function AccountsPage() {
   };
 
   const totalAmount = transactions.reduce((acc, t) => {
-    if (type === 'profit') {
+    if (searchedType === 'profit') {
       return t.type === 'income' ? acc + t.amount : acc - t.amount;
     }
     return acc + t.amount;
@@ -143,12 +145,12 @@ export default function AccountsPage() {
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b bg-zinc-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900">
-              {type.charAt(0).toUpperCase() + type.slice(1)} Transactions
+              {searchedType.charAt(0).toUpperCase() + searchedType.slice(1)} Transactions
             </h3>
             <span className={`text-sm font-medium px-3 py-1 rounded-md border shadow-sm bg-white ${
-              type === 'profit' ? (totalAmount >= 0 ? 'text-green-600' : 'text-red-600') : 'text-zinc-700'
+              searchedType === 'profit' ? (totalAmount >= 0 ? 'text-green-600' : 'text-red-600') : 'text-zinc-700'
             }`}>
-              Total: {totalAmount < 0 ? '-' : ''}₦{Math.abs(totalAmount).toFixed(2)}
+              Total: {totalAmount < 0 ? '-' : ''}₦{Math.abs(totalAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
           </div>
           <Table>
@@ -179,17 +181,17 @@ export default function AccountsPage() {
                     <TableCell>{t.date}</TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        type === 'profit' 
+                        searchedType === 'profit' 
                           ? (t.type === 'income' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800') 
                           : 'bg-zinc-100 text-zinc-800'
                       }`}>
-                        {t.source} {type === 'profit' && `(${t.type})`}
+                        {t.source} {searchedType === 'profit' && `(${t.type})`}
                       </span>
                     </TableCell>
                     <TableCell>{t.note}</TableCell>
                     <TableCell className="text-right font-medium">
-                      <span className={type === 'profit' ? (t.type === 'income' ? 'text-emerald-600' : 'text-rose-600') : ''}>
-                        {type === 'profit' && t.type === 'expense' ? '-' : ''}₦{Number(t.amount).toFixed(2)}
+                      <span className={searchedType === 'profit' ? (t.type === 'income' ? 'text-emerald-600' : 'text-rose-600') : ''}>
+                        {searchedType === 'profit' && t.type === 'expense' ? '-' : ''}₦{Number(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </TableCell>
                   </TableRow>

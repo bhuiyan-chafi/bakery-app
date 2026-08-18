@@ -9,6 +9,14 @@ settings_bp = Blueprint('settings', __name__)
 # --- Measurement Units ---
 
 @settings_bp.route('/measurement-unit', methods=['GET'])
+@require_permission(
+    'settings:measurement-unit',
+    'inventory:view', 'inventory:add', 'inventory:view-purchase', 'inventory:manage-purchase',
+    'recipe:view', 'recipe:manage',
+    'production:view', 'production:manage',
+    'product:view', 'product:manage',
+    'user:manage'
+)
 def get_measurement_units():
     units = UnitMeasurement.query.all()
     return jsonify([{
@@ -18,6 +26,7 @@ def get_measurement_units():
     } for unit in units]), 200
 
 @settings_bp.route('/measurement-unit', methods=['POST'])
+@require_permission('settings:measurement-unit')
 def add_measurement_unit():
     data = request.get_json()
     name = data.get('name')
@@ -33,6 +42,7 @@ def add_measurement_unit():
     return jsonify({"message": "Measurement unit added successfully", "uuid": unit.uuid}), 201
 
 @settings_bp.route('/measurement-unit/<uuid>', methods=['PUT'])
+@require_permission('settings:measurement-unit')
 def update_measurement_unit(uuid):
     unit = UnitMeasurement.query.get_or_404(uuid)
     data = request.get_json()
@@ -46,6 +56,7 @@ def update_measurement_unit(uuid):
     return jsonify({"message": "Measurement unit updated successfully"}), 200
 
 @settings_bp.route('/measurement-unit/<uuid>', methods=['DELETE'])
+@require_permission('settings:measurement-unit')
 def delete_measurement_unit(uuid):
     unit = UnitMeasurement.query.get_or_404(uuid)
     db.session.delete(unit)
