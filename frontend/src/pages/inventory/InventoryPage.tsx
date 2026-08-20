@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, ChevronsUpDown, Check, ClipboardList } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronsUpDown, Check, ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,54 @@ export default function InventoryPage() {
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [units, setUnits] = useState<UnitMeasurement[]>([]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof InventoryItem, direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedItems = useMemo(() => {
+    let result = [...items];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(item => 
+        (item.name?.toLowerCase().includes(lowerSearch)) ||
+        (item.unit_measurement?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [items, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof InventoryItem) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof InventoryItem }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
   const [filteredUnits, setFilteredUnits] = useState<UnitMeasurement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -226,15 +274,16 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="space-y-3">
-        {/* Title row */}
-        <div>
-          <h1 className="text-3xl font-light tracking-tight">Inventory</h1>
-          <p className="text-muted-foreground mt-1">Manage raw materials and ingredients used in production.</p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-3">
+          {/* Title row */}
+          <div>
+            <h1 className="text-3xl font-light tracking-tight">Inventory</h1>
+            <p className="text-muted-foreground mt-1">Manage raw materials and ingredients used in production.</p>
+          </div>
 
-        {/* Action buttons row */}
-        <div className="flex flex-wrap items-center gap-2">
+          {/* Action buttons row */}
+          <div className="flex flex-wrap items-center gap-2">
           {canViewPurchase && (
             <Button asChild variant="outline" size="sm" className="h-9">
               <Link to="/inventory/manage" className="flex items-center gap-2">
@@ -348,6 +397,16 @@ export default function InventoryPage() {
           </Dialog>
           )}
         </div>
+        </div>
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search inventory..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -355,10 +414,10 @@ export default function InventoryPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">Name</TableHead>
-              <TableHead className="font-medium">Unit</TableHead>
-              <TableHead className="font-medium">Stock</TableHead>
-              <TableHead className="font-medium">Alert Qty</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Name <SortIcon columnKey="name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('unit_measurement')}>Unit <SortIcon columnKey="unit_measurement" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('current_stock')}>Stock <SortIcon columnKey="current_stock" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('quantity_alert')}>Alert Qty <SortIcon columnKey="quantity_alert" /></TableHead>
               {canAdd && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
@@ -369,14 +428,14 @@ export default function InventoryPage() {
                   Loading inventory...
                 </TableCell>
               </TableRow>
-            ) : items.length === 0 ? (
+            ) : filteredAndSortedItems.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={canAdd ? 5 : 4} className="text-center py-10 text-muted-foreground italic">
                   No inventory items found. {canAdd ? 'Click "Add Item" to get started.' : ''}
                 </TableCell>
               </TableRow>
             ) : (
-              items.map((item) => (
+              filteredAndSortedItems.map((item) => (
                 <TableRow key={item.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{item.name}</TableCell>
                   <TableCell className="text-zinc-500">{item.unit_measurement}</TableCell>

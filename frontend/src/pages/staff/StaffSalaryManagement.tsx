@@ -25,6 +25,12 @@ interface SalaryRecord {
   created_at: string;
 }
 
+interface OtherInfo {
+  uuid: string;
+  field_title: string;
+  field_value: string;
+}
+
 interface StaffInfo {
   username: string;
   name: string;
@@ -38,6 +44,7 @@ export default function StaffSalaryManagement() {
 
   const [records, setRecords] = useState<SalaryRecord[]>([]);
   const [staff, setStaff] = useState<StaffInfo | null>(null);
+  const [otherInfo, setOtherInfo] = useState<OtherInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Date range state
@@ -65,6 +72,20 @@ export default function StaffSalaryManagement() {
     }
   }, [id, token]);
 
+  const fetchOtherInfo = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${id}/other-info`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOtherInfo(Array.isArray(data) ? data : []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch other info", error);
+    }
+  }, [id, token]);
+
   const fetchSalaries = useCallback(async () => {
     if (!id || !token) return;
     try {
@@ -88,8 +109,9 @@ export default function StaffSalaryManagement() {
     if (canManageStaff) {
       fetchStaffDetails();
       fetchSalaries();
+      fetchOtherInfo();
     }
-  }, [canManageStaff, fetchStaffDetails, fetchSalaries]);
+  }, [canManageStaff, fetchStaffDetails, fetchSalaries, fetchOtherInfo]);
 
   const handleSettleSalary = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,7 +216,7 @@ export default function StaffSalaryManagement() {
         </div>
       </div>
 
-      <div className="w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
         {/* ── Filter / Setup Box ──────────────────────────── */}
         <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col justify-between">
           <div>
@@ -251,6 +273,29 @@ export default function StaffSalaryManagement() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* ── Staff Information Box ──────────────────────────── */}
+        <div className="bg-white p-6 rounded-xl border shadow-sm flex flex-col">
+          <h2 className="text-lg font-semibold mb-4">Additional Information</h2>
+          {otherInfo.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-zinc-500 italic py-10 bg-zinc-50/50 rounded-lg border">
+              No additional information provided.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {otherInfo.map((info) => (
+                <div key={info.uuid} className="pb-3 border-b last:border-b-0 last:pb-0">
+                  <p className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-1">
+                    {info.field_title}
+                  </p>
+                  <p className="text-base text-zinc-900 whitespace-pre-wrap">
+                    {info.field_value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

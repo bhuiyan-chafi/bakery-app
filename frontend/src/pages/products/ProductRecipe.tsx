@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,10 @@ import {
   Check,
   ChevronUp,
   Eye,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
@@ -87,6 +91,48 @@ export default function RecipePage() {
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Recipe, direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedRecipes = useMemo(() => {
+    let result = [...recipes];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(r => 
+        (r.name?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig && sortConfig.key === 'name') {
+      result.sort((a, b) => {
+        let aValue = a.name.toLowerCase();
+        let bValue = b.name.toLowerCase();
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [recipes, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof Recipe) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof Recipe }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
 
   // Which recipe rows are expanded (view mode)
   const [expandedUuids, setExpandedUuids] = useState<Set<string>>(new Set());
@@ -422,22 +468,35 @@ export default function RecipePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight">Recipes</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your bakery recipes and their ingredients.
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-3">
+          <div>
+            <h1 className="text-3xl font-light tracking-tight">Recipes</h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your bakery recipes and their ingredients.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
+            <Button
+              onClick={openAdd}
+              className="bg-black text-white hover:bg-zinc-800 shrink-0 mt-1"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Recipe
+            </Button>
+          )}
+          </div>
         </div>
-        {canManage && (
-          <Button
-            onClick={openAdd}
-            className="bg-black text-white hover:bg-zinc-800 shrink-0 mt-1"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Recipe
-          </Button>
-        )}
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search recipes..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Recipe list */}
@@ -445,7 +504,7 @@ export default function RecipePage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">Name</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Name <SortIcon columnKey="name" /></TableHead>
               <TableHead className="font-medium">Ingredients</TableHead>
               <TableHead className="text-right font-medium">Actions</TableHead>
             </TableRow>
@@ -460,7 +519,7 @@ export default function RecipePage() {
                   Loading recipes...
                 </TableCell>
               </TableRow>
-            ) : recipes.length === 0 ? (
+            ) : filteredAndSortedRecipes.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={3}
@@ -470,7 +529,7 @@ export default function RecipePage() {
                 </TableCell>
               </TableRow>
             ) : (
-              recipes.map((recipe) => {
+              filteredAndSortedRecipes.map((recipe) => {
                 const expanded = expandedUuids.has(recipe.uuid);
                 return (
                   <>

@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Truck, Eye, CheckCircle, X, Package } from "lucide-react";
+import { Truck, Eye, CheckCircle, X, Package, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/config/constants";
@@ -51,6 +52,62 @@ export default function MyDeliveriesPage() {
 
   const [orders, setOrders] = useState<DeliveryOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof DeliveryOrder, direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedOrders = useMemo(() => {
+    let result = [...orders];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(order => {
+        const dateStr = formatDate(order.created_at).toLowerCase();
+        return (
+          (order.order_number?.toLowerCase().includes(lowerSearch)) ||
+          (order.customer_name?.toLowerCase().includes(lowerSearch)) ||
+          (order.phone?.toLowerCase().includes(lowerSearch)) ||
+          dateStr.includes(lowerSearch)
+        );
+      });
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'created_at') {
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [orders, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof DeliveryOrder) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof DeliveryOrder }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
 
   // View modal
   const [viewOrder, setViewOrder] = useState<DeliveryOrder | null>(null);
@@ -124,25 +181,37 @@ export default function MyDeliveriesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="space-y-4">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
-            <Truck className="w-7 h-7 text-zinc-400" />
-            My Deliveries
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Orders assigned to you for delivery.
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
+              <Truck className="w-7 h-7 text-zinc-400" />
+              My Deliveries
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Orders assigned to you for delivery.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center">
+              <div className="text-2xl font-semibold text-amber-700">{pendingCount}</div>
+              <div className="text-xs text-amber-600">Pending</div>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2 text-center">
+              <div className="text-2xl font-semibold text-emerald-700">{doneCount}</div>
+              <div className="text-xs text-emerald-600">Delivered</div>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-2xl font-semibold text-amber-700">{pendingCount}</div>
-            <div className="text-xs text-amber-600">Pending</div>
-          </div>
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2 text-center">
-            <div className="text-2xl font-semibold text-emerald-700">{doneCount}</div>
-            <div className="text-xs text-emerald-600">Delivered</div>
-          </div>
+
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search deliveries..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
@@ -150,28 +219,28 @@ export default function MyDeliveriesPage() {
       <div className="bg-white border rounded-xl overflow-hidden">
         {isLoading ? (
           <div className="py-16 text-center text-muted-foreground italic">Loading your deliveries…</div>
-        ) : orders.length === 0 ? (
+        ) : filteredAndSortedOrders.length === 0 ? (
           <div className="py-16 text-center">
             <Package className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
-            <p className="text-muted-foreground italic">No deliveries assigned to you yet.</p>
+            <p className="text-muted-foreground italic">No deliveries found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-zinc-50 border-b text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                  <th className="text-left px-5 py-3 whitespace-nowrap">#</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('order_number')}># <SortIcon columnKey="order_number" /></th>
                   <th className="text-left px-5 py-3 whitespace-nowrap md:hidden">Actions</th>
-                  <th className="text-left px-5 py-3 whitespace-nowrap">Customer</th>
-                  <th className="text-left px-5 py-3 whitespace-nowrap">Phone</th>
-                  <th className="text-left px-5 py-3 whitespace-nowrap">Address</th>
-                  <th className="text-left px-5 py-3 whitespace-nowrap">Status</th>
-                  <th className="text-left px-5 py-3 whitespace-nowrap">Date</th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('customer_name')}>Customer <SortIcon columnKey="customer_name" /></th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('phone')}>Phone <SortIcon columnKey="phone" /></th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('address')}>Address <SortIcon columnKey="address" /></th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('status')}>Status <SortIcon columnKey="status" /></th>
+                  <th className="text-left px-5 py-3 whitespace-nowrap cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('created_at')}>Date <SortIcon columnKey="created_at" /></th>
                   <th className="text-right px-5 py-3 whitespace-nowrap hidden md:table-cell">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {orders.map(order => {
+                {filteredAndSortedOrders.map(order => {
                   const isComplete = order.status === "complete";
                   const ActionButtons = (
                     <div className="flex gap-1">

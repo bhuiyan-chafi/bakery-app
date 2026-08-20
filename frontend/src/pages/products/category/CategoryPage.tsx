@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, Check, ChevronsUpDown, Pencil, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Check, ChevronsUpDown, Pencil, Trash2, ArrowLeft, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Dialog,
@@ -62,6 +62,55 @@ export default function CategoryPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Category, direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedCategories = useMemo(() => {
+    let result = [...categories];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(c => 
+        (c.name?.toLowerCase().includes(lowerSearch)) ||
+        (c.parent?.toLowerCase().includes(lowerSearch)) ||
+        (c.status?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [categories, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof Category) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof Category }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
   
   // Form State
   const [editUuid, setEditUuid] = useState<string | null>(null);
@@ -221,18 +270,20 @@ export default function CategoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link to="/products" className="text-muted-foreground hover:text-black transition-colors">
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <h1 className="text-3xl font-light tracking-tight">Product Categories</h1>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Link to="/products" className="text-muted-foreground hover:text-black transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
+              <h1 className="text-3xl font-light tracking-tight">Product Categories</h1>
+            </div>
+            <p className="text-muted-foreground mt-1">Manage your product grouping and hierarchy.</p>
           </div>
-          <p className="text-muted-foreground mt-1">Manage your product grouping and hierarchy.</p>
-        </div>
-        
-        {canManage && (
+          
+          <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
           <Dialog open={isModalOpen} onOpenChange={(open) => {
             setIsModalOpen(open);
             if (!open) resetForm();
@@ -350,15 +401,26 @@ export default function CategoryPage() {
           </DialogContent>
         </Dialog>
         )}
+          </div>
+        </div>
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search categories..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded-md border shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">Category Name</TableHead>
-              <TableHead className="font-medium">Parent</TableHead>
-              <TableHead className="font-medium">Status</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Category Name <SortIcon columnKey="name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('parent')}>Parent <SortIcon columnKey="parent" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('status')}>Status <SortIcon columnKey="status" /></TableHead>
               {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
@@ -369,14 +431,14 @@ export default function CategoryPage() {
                   Loading categories...
                 </TableCell>
               </TableRow>
-            ) : categories.length === 0 ? (
+            ) : filteredAndSortedCategories.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={canManage ? 4 : 3} className="text-center py-10 text-muted-foreground italic">
                   No categories found.
                 </TableCell>
               </TableRow>
             ) : (
-              categories.map((category) => (
+              filteredAndSortedCategories.map((category) => (
                 <TableRow key={category.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{category.name}</TableCell>
                   <TableCell className="text-zinc-500 italic">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, PlayCircle, CheckCircle2, Clock, CheckSquare } from "lucide-react";
+import { Plus, Trash2, PlayCircle, CheckCircle2, Clock, CheckSquare, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
@@ -82,6 +82,58 @@ export default function ProductionPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: 'recipe_name' | 'status' | 'produced_at', direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedProductions = useMemo(() => {
+    let result = [...productions];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(p => 
+        (p.recipe_name?.toLowerCase().includes(lowerSearch)) ||
+        (p.status?.toLowerCase().includes(lowerSearch)) ||
+        (p.produced_at?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'produced_at') {
+          aValue = aValue ? new Date(aValue).getTime() : 0;
+          bValue = bValue ? new Date(bValue).getTime() : 0;
+        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [productions, searchTerm, sortConfig]);
+
+  const handleSort = (key: 'recipe_name' | 'status' | 'produced_at') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: 'recipe_name' | 'status' | 'produced_at' }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
 
   // For the finished block
   const [endProductsState, setEndProductsState] = useState<Record<string, EndProductEntry[]>>({});
@@ -381,14 +433,25 @@ export default function ProductionPage() {
 
       {/* Production Log */}
       <div className="space-y-3">
-        <h2 className="text-base font-semibold">Production Log</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <h2 className="text-base font-semibold">Production Log</h2>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <Input 
+              placeholder="Search production..." 
+              className="pl-9 h-9 w-full bg-white"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
         <div className="bg-white border rounded-md overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-zinc-50/50">
-                <TableHead className="font-medium">Recipe</TableHead>
-                <TableHead className="font-medium">Status</TableHead>
-                <TableHead className="font-medium">Completed At</TableHead>
+                <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('recipe_name')}>Recipe <SortIcon columnKey="recipe_name" /></TableHead>
+                <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('status')}>Status <SortIcon columnKey="status" /></TableHead>
+                <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('produced_at')}>Completed At <SortIcon columnKey="produced_at" /></TableHead>
                 <TableHead className="font-medium">Notes</TableHead>
                 {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
               </TableRow>
@@ -398,12 +461,12 @@ export default function ProductionPage() {
                 <TableRow>
                   <TableCell colSpan={canManage ? 5 : 4} className="text-center py-10 text-muted-foreground italic">Loading...</TableCell>
                 </TableRow>
-              ) : productions.length === 0 ? (
+              ) : filteredAndSortedProductions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 5 : 4} className="text-center py-10 text-muted-foreground italic">No production records yet.</TableCell>
+                  <TableCell colSpan={canManage ? 5 : 4} className="text-center py-10 text-muted-foreground italic">No production records found.</TableCell>
                 </TableRow>
               ) : (
-                productions.map((p) => {
+                filteredAndSortedProductions.map((p) => {
                   const cfg = statusConfig[p.status];
                   const next = nextStatus[p.status];
                   return (

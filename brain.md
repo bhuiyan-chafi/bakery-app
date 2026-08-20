@@ -482,3 +482,25 @@ If no record is found, the system will give me a input field to specify the amou
 - Second, I noticed that selecting the month automatically triggers the filter, in that case do I need the "Filter" button?
 - in the @AccountsPage.tsx if I chage the type "Income/Expense/Profit" it changes the titles of the table and currency color before I press "Search" button. This can be confusig for the user.
 - can you format the amount in this manner 25000 to 25,000.00
+
+### Additional Features
+
+Now we are going to add some additional features based client's requirements.
+
+1. Insert a search Bar, sort, and filter button on the @ManageOrder.tsx to look up orders by: order number, name, phone number, or order date. I think the easiest way will be using jsquery data table style. In the jequery datatable the search bar works for any field of data. And in each column there is a icon that sorts the rows on each column.
+
+2. Rename “My order” to “My Delivery” in @Sidebar.tsx. Insert a search bar on the @MyDeliveriesPage.tsx to look up deliveries by: order number, Customer name, driver name, or date. I think the easiest way will be using jsquery data table style. In the jequery datatable the search bar works for any field of data. And in each column there is a icon that sorts the rows on each column.
+
+3. Insert a search bar, sort, and filter button on the @InventoryPage.tsx and @InventoryManage.tsx. I think the easiest way will be using jsquery data table style. In the jequery datatable the search bar works for any field of data. And in each column there is a icon that sorts the rows on each column.
+
+4. Need to do the same on @ProductPage.tsx, @CategoryPage.tsx
+
+5. For the @ProductRecipe.tsx we have to do this only for the name field. Since the Ingredients column will contain dynamic data, I dont think it is feasible to add that.
+
+6. For @ProductProduction.tsx page consider the following fields to implement the feature: Recipe, Status, Completed At
+
+### Additional Information on the Payment Page
+
+If you have a look on @StaffEditPage.tsx you will see there is an option to add additional information per staff. That information is stored in "UserOtherInformation" class under @user.py model. I want to bring this information on @StaffSalaryManagement.tsx page. The plan is to:
+
+- make "Check Salary Status" column half a page and then on the other half put the informations. But for mobile screen they must take full row width.

@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Trash2, Pencil, Eye, X, Printer, Check, ChevronsUpDown } from "lucide-react";
+import { ArrowLeft, Trash2, Pencil, Eye, X, Printer, Check, ChevronsUpDown, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -74,6 +74,62 @@ export default function ManageOrder() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Order, direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedOrders = useMemo(() => {
+    let result = [...orders];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(order => {
+        const dateStr = formatDate(order.created_at).toLowerCase();
+        return (
+          (order.order_number?.toLowerCase().includes(lowerSearch)) ||
+          (order.customer_name?.toLowerCase().includes(lowerSearch)) ||
+          (order.phone?.toLowerCase().includes(lowerSearch)) ||
+          dateStr.includes(lowerSearch)
+        );
+      });
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'created_at') {
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [orders, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof Order) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof Order }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
 
   // Detail modal
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
@@ -373,15 +429,27 @@ export default function ManageOrder() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Link to="/orders" className="text-muted-foreground hover:text-black transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <h1 className="text-3xl font-light tracking-tight">Manage Orders</h1>
-          <span className="text-sm text-zinc-400 ml-1">{orders.length} order(s)</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Link to="/orders" className="text-muted-foreground hover:text-black transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <h1 className="text-3xl font-light tracking-tight">Manage Orders</h1>
+            <span className="text-sm text-zinc-400 ml-1">{filteredAndSortedOrders.length} order(s)</span>
+          </div>
+          <p className="text-muted-foreground">View and manage customer orders. Click a row to see items.</p>
         </div>
-        <p className="text-muted-foreground">View and manage the latest 50 customer orders. Click a row to see items.</p>
+        
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search orders..." 
+            className="pl-9 h-9 w-full"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -389,32 +457,32 @@ export default function ManageOrder() {
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">#</TableHead>
-              <TableHead className="font-medium">Customer</TableHead>
-              <TableHead className="font-medium">Type</TableHead>
-              <TableHead className="font-medium">Status</TableHead>
-              <TableHead className="font-medium">Sold By</TableHead>
-              <TableHead className="font-medium">Assigned To</TableHead>
-              <TableHead className="font-medium text-right">Total</TableHead>
-              <TableHead className="font-medium">Date</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('order_number')}># <SortIcon columnKey="order_number" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('customer_name')}>Customer <SortIcon columnKey="customer_name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('order_type')}>Type <SortIcon columnKey="order_type" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('status')}>Status <SortIcon columnKey="status" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('sold_by')}>Sold By <SortIcon columnKey="sold_by" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('assigned_to')}>Assigned To <SortIcon columnKey="assigned_to" /></TableHead>
+              <TableHead className="font-medium text-right cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('total')}>Total <SortIcon columnKey="total" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('created_at')}>Date <SortIcon columnKey="created_at" /></TableHead>
               <TableHead className="text-right font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
+                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground italic">
                   Loading orders…
                 </TableCell>
               </TableRow>
-            ) : orders.length === 0 ? (
+            ) : filteredAndSortedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground italic">
-                  No orders yet. Place your first order from the POS.
+                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground italic">
+                  No orders found.
                 </TableCell>
               </TableRow>
             ) : (
-              orders.map(order => {
+              filteredAndSortedOrders.map(order => {
                 const isComplete = order.status === "complete";
                 return (
                   <TableRow

@@ -15,7 +15,7 @@ const menuItems = [
   { label: "Inventory",  icon: Package,          path: "/inventory", permissions: ["inventory:view", "inventory:add", "inventory:view-purchase", "inventory:manage-purchase"] },
   { label: "Orders",     icon: ClipboardList,    path: "/orders", permissions: ["order:view", "order:manage"] },
   { label: "Sale",       icon: ShoppingBag,      path: "/sale", permissions: ["sale:view"] },
-  { label: "My Orders",  icon: Truck,            path: "/my-orders", permissions: ["sale:orders"] },
+  { label: "My Delivery",  icon: Truck,            path: "/my-orders", permissions: ["sale:orders"] },
   { label: "Accounts",   icon: Wallet,           path: "/accounts", permissions: ["account:view", "account:manage"] },
   { label: "Staff Management", icon: Users,      path: "/staff", permissions: ["staff:view"] },
 ];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +62,54 @@ export default function ProductPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Product | 'total_amount', direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedProducts = useMemo(() => {
+    let result = [...products];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(p => 
+        (p.name?.toLowerCase().includes(lowerSearch)) ||
+        (p.category_name?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = sortConfig.key === 'total_amount' ? (a.price * (a.current_stock ?? 0)) : a[sortConfig.key as keyof Product];
+        let bValue: any = sortConfig.key === 'total_amount' ? (b.price * (b.current_stock ?? 0)) : b[sortConfig.key as keyof Product];
+
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [products, searchTerm, sortConfig]);
+
+  const handleSort = (key: keyof Product | 'total_amount') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: keyof Product | 'total_amount' }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -214,22 +262,23 @@ export default function ProductPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-3">
-        {/* Title row */}
-        <div>
-          <h1 className="text-3xl font-light tracking-tight">Products</h1>
-          <p className="text-muted-foreground mt-1">Manage your bakery items, pricing, and stock.</p>
-        </div>
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-3">
+          {/* Title row */}
+          <div>
+            <h1 className="text-3xl font-light tracking-tight">Products</h1>
+            <p className="text-muted-foreground mt-1">Manage your bakery items, pricing, and stock.</p>
+          </div>
 
-        {/* Action buttons row */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="h-9">
-            <Link to="/products/categories" className="flex items-center gap-2">
-              <ListTree className="w-4 h-4" />
-              Product Categories
-            </Link>
-          </Button>
+          {/* Action buttons row */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <Link to="/products/categories" className="flex items-center gap-2">
+                <ListTree className="w-4 h-4" />
+                Product Categories
+              </Link>
+            </Button>
 
           {canManage && (
             <Dialog
@@ -349,6 +398,16 @@ export default function ProductPage() {
             </DialogContent>
           </Dialog>
           )}
+          </div>
+        </div>
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search products..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
@@ -357,11 +416,11 @@ export default function ProductPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">Name</TableHead>
-              <TableHead className="font-medium">Category</TableHead>
-              <TableHead className="font-medium">Price</TableHead>
-              <TableHead className="font-medium">Current Stock</TableHead>
-              <TableHead className="font-medium">Total Amount</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Name <SortIcon columnKey="name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('category_name')}>Category <SortIcon columnKey="category_name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('price')}>Price <SortIcon columnKey="price" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('current_stock')}>Current Stock <SortIcon columnKey="current_stock" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('total_amount')}>Total Amount <SortIcon columnKey="total_amount" /></TableHead>
               {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
@@ -372,14 +431,14 @@ export default function ProductPage() {
                   Loading products...
                 </TableCell>
               </TableRow>
-            ) : products.length === 0 ? (
+            ) : filteredAndSortedProducts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">
-                  No products found. {canManage ? 'Click "Add Product" to get started.' : ''}
+                  No products found.
                 </TableCell>
               </TableRow>
             ) : (
-              products.map((p) => (
+              filteredAndSortedProducts.map((p) => (
                 <TableRow key={p.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-zinc-500">{p.category_name}</TableCell>
