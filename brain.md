@@ -497,7 +497,9 @@ Now we are going to add some additional features based client's requirements.
 
 5. For the @ProductRecipe.tsx we have to do this only for the name field. Since the Ingredients column will contain dynamic data, I dont think it is feasible to add that.
 
-6. For @ProductProduction.tsx page consider the following fields to implement the feature: Recipe, Status, Completed At
+6. For @ProductProduction.tsx page consider the following fields to implement the feature: Recipe, Status, Completed At.
+
+7. I want the same search and sort in @StaffManagement.tsx
 
 ### Additional Information on the Payment Page
 

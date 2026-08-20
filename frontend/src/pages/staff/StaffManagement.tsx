@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Pencil, RefreshCw, Phone, LogIn, LogOut, Clock, AlertTriangle, CheckCheck, CalendarDays, Banknote } from "lucide-react";
+import { Users, Pencil, Phone, LogIn, LogOut, Clock, AlertTriangle, CheckCheck, CalendarDays, Banknote, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -75,6 +76,60 @@ export default function StaffManagement() {
   const [pendingAction, setPendingAction] = useState<{ userUuid: string; action: string } | null>(null);
   const [note, setNote] = useState("");
   const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortConfig, setSortConfig] = useState<{ key: 'username' | 'name' | 'phone' | 'last_login', direction: 'asc' | 'desc' } | null>(null);
+
+  const filteredAndSortedStaff = useMemo(() => {
+    let result = [...staffList];
+
+    if (searchTerm.trim()) {
+      const lowerSearch = searchTerm.toLowerCase();
+      result = result.filter(s => 
+        (s.username?.toLowerCase().includes(lowerSearch)) ||
+        (s.name?.toLowerCase().includes(lowerSearch)) ||
+        (s.phone?.toLowerCase().includes(lowerSearch))
+      );
+    }
+
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key];
+        let bValue: any = b[sortConfig.key];
+
+        if (sortConfig.key === 'last_login') {
+          const aTime = lastAttendedMap[a.uuid];
+          const bTime = lastAttendedMap[b.uuid];
+          aValue = aTime ? new Date(aTime).getTime() : 0;
+          bValue = bTime ? new Date(bTime).getTime() : 0;
+        } else if (typeof aValue === 'string' && typeof bValue === 'string') {
+          aValue = aValue.toLowerCase();
+          bValue = bValue.toLowerCase();
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [staffList, searchTerm, sortConfig, lastAttendedMap]);
+
+  const handleSort = (key: 'username' | 'name' | 'phone' | 'last_login') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }: { columnKey: 'username' | 'name' | 'phone' | 'last_login' }) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
+      : <ArrowDown className="ml-1 w-3 h-3 inline text-black" />;
+  };
 
   const token = localStorage.getItem("token");
 
@@ -299,24 +354,25 @@ export default function StaffManagement() {
   return (
     <div className="space-y-6">
       {/* ── Page Header ────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
-            <Users className="w-7 h-7 text-zinc-400" />
-            Staff Management
-          </h1>
-          <p className="text-muted-foreground mt-1">View and manage bakery staff members and attendance.</p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-3">
+          <div>
+            <h1 className="text-3xl font-light tracking-tight flex items-center gap-2">
+              <Users className="w-7 h-7 text-zinc-400" />
+              Staff Management
+            </h1>
+            <p className="text-muted-foreground mt-1">View and manage bakery staff members and attendance.</p>
+          </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchData}
-          disabled={isLoading}
-          className="h-9 gap-2 w-fit"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input 
+            placeholder="Search staff..." 
+            className="pl-9 h-9 w-full bg-white"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
       </div>
 
       {/* ── Staff Table ─────────────────────────────────── */}
@@ -324,9 +380,9 @@ export default function StaffManagement() {
         <Table>
           <TableHeader>
             <TableRow className="bg-zinc-50/50">
-              <TableHead className="font-medium">Name</TableHead>
-              <TableHead className="font-medium">Phone</TableHead>
-              <TableHead className="font-medium">Last Attended</TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Name <SortIcon columnKey="name" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('phone')}>Phone <SortIcon columnKey="phone" /></TableHead>
+              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('last_login')}>Last Attended <SortIcon columnKey="last_login" /></TableHead>
               {canManageStaff && <TableHead className="font-medium">Attendance</TableHead>}
               <TableHead className="text-right font-medium">Action</TableHead>
             </TableRow>
@@ -338,14 +394,14 @@ export default function StaffManagement() {
                   Loading staff members...
                 </TableCell>
               </TableRow>
-            ) : staffList.length === 0 ? (
+            ) : filteredAndSortedStaff.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center py-10 text-muted-foreground italic">
                   No staff members found.
                 </TableCell>
               </TableRow>
             ) : (
-              staffList.map((user) => (
+              filteredAndSortedStaff.map((user) => (
                 <TableRow key={user.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   {/* Name */}
                   <TableCell>
