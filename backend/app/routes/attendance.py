@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.extensions import db
 from app.utils.decorators import require_permission
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 
@@ -195,3 +196,74 @@ def resolve_attendance(user_uuid):
     db.session.commit()
 
     return jsonify({"message": "Attendance updated successfully", "record": _serialize(record)}), 200
+
+# ── GET /api/attendance/my-status ──────────────────────────────────────────────
+@attendance_bp.route('/my-status', methods=['GET'])
+@jwt_required()
+def get_my_status():
+    from app.models.user import User, StaffAttendance
+    user_uuid = get_jwt_identity()
+    User.query.get_or_404(user_uuid)
+    
+    today = today_wat()
+    record = StaffAttendance.query.filter_by(user_uuid=user_uuid, date=today).first()
+    
+    if not record:
+        return jsonify({"status": "not_clocked_in", "record": None}), 200
+        
+    return jsonify({"status": record.status.value, "record": _serialize(record)}), 200
+
+# ── POST /api/attendance/my-clock-in ───────────────────────────────────────────
+@attendance_bp.route('/my-clock-in', methods=['POST'])
+@jwt_required()
+def my_clock_in():
+    from app.models.user import User, StaffAttendance, AttendanceStatus
+    from sqlalchemy.exc import IntegrityError
+    
+    user_uuid = get_jwt_identity()
+    User.query.get_or_404(user_uuid)
+    today = today_wat()
+
+    # Check if already clocked in today
+    existing = StaffAttendance.query.filter_by(user_uuid=user_uuid, date=today).first()
+    if existing:
+        return jsonify({"error": "Already clocked in for today", "record": _serialize(existing)}), 409
+
+    record = StaffAttendance(
+        user_uuid=user_uuid,
+        date=today,
+        status=AttendanceStatus.CLOCKED_IN,
+        working_day=0.0,
+        clocked_in_at=now_wat()
+    )
+    db.session.add(record)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Clock-in record already exists for today"}), 409
+
+    return jsonify({"message": "Clocked in successfully", "record": _serialize(record)}), 201
+
+# ── PATCH /api/attendance/my-clock-out ─────────────────────────────────────────
+@attendance_bp.route('/my-clock-out', methods=['PATCH'])
+@jwt_required()
+def my_clock_out():
+    from app.models.user import StaffAttendance, AttendanceStatus
+    
+    user_uuid = get_jwt_identity()
+    today = today_wat()
+    record = StaffAttendance.query.filter_by(user_uuid=user_uuid, date=today).first()
+
+    if not record:
+        return jsonify({"error": "No clock-in record found for today"}), 404
+
+    if record.status != AttendanceStatus.CLOCKED_IN:
+        return jsonify({"error": "Attendance for today is already finalized", "record": _serialize(record)}), 409
+
+    record.status = AttendanceStatus.CLOCKED_OUT
+    record.working_day = 1.0
+    record.resolved_at = now_wat()
+    db.session.commit()
+
+    return jsonify({"message": "Clocked out successfully", "record": _serialize(record)}), 200

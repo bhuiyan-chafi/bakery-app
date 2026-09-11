@@ -147,8 +147,8 @@ export default function MiscellaneousPage() {
             <Input 
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Tips (max 15 chars)" 
-              maxLength={15}
+              placeholder="e.g. Tips (max 50 chars)" 
+              maxLength={50}
               className="h-9 w-full text-sm" 
             />
           </div>

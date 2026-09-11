@@ -35,6 +35,14 @@ def list_recipes():
     return jsonify([_recipe_to_dict(r) for r in recipes]), 200
 
 
+@recipe_bp.route('/names', methods=['GET'])
+@require_permission('recipe:view', 'recipe:manage', 'production:manage')
+def list_recipe_names():
+    from app.models.product import Recipe
+    recipes = Recipe.query.order_by(Recipe.name).all()
+    return jsonify([{"uuid": r.uuid, "name": r.name} for r in recipes]), 200
+
+
 @recipe_bp.route('/<recipe_uuid>', methods=['GET'])
 @require_permission('recipe:view', 'recipe:manage')
 def get_recipe(recipe_uuid):

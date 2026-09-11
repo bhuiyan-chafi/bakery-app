@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ShoppingBasket, PlayCircle, Clock, Banknote, Wallet, Truck, PackageCheck, AlertCircle } from "lucide-react";
+import { ShoppingBasket, PlayCircle, Clock, Banknote, Wallet, Truck, PackageCheck, AlertCircle, CheckCircle2, LogIn, LogOut, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "react-toastify";
 import { API_BASE_URL } from "@/config/constants";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -31,6 +33,11 @@ export default function DashboardPage() {
   const [myCompletedDeliveries, setMyCompletedDeliveries] = useState<number | null>(null);
   const [myPendingDeliveries, setMyPendingDeliveries] = useState<number | null>(null);
   const [isLoadingMyDeliveries, setIsLoadingMyDeliveries] = useState(true);
+
+  // My Attendance
+  const [attendanceStatus, setAttendanceStatus] = useState<string>("not_clocked_in");
+  const [isLoadingAttendance, setIsLoadingAttendance] = useState(true);
+  const [isClocking, setIsClocking] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -132,7 +139,58 @@ export default function DashboardPage() {
     } else {
       setIsLoadingMyDeliveries(false);
     }
+
+    if (username) {
+      setIsLoadingAttendance(true);
+      fetch(`${API_BASE_URL}/attendance/my-status`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        setAttendanceStatus(data.status || "not_clocked_in");
+      })
+      .catch(err => console.error("My attendance fetch error:", err))
+      .finally(() => setIsLoadingAttendance(false));
+    } else {
+      setIsLoadingAttendance(false);
+    }
   }, [token, canViewProduction, canViewOrders, canViewAccounts, canViewMyDeliveries, username]);
+
+  const handleClockIn = async () => {
+    setIsClocking(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/attendance/my-clock-in`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Clock-in failed");
+      setAttendanceStatus("clocked_in");
+      toast.success("Clocked in successfully");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsClocking(false);
+    }
+  };
+
+  const handleClockOut = async () => {
+    setIsClocking(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/attendance/my-clock-out`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Clock-out failed");
+      setAttendanceStatus("clocked_out");
+      toast.success("Clocked out successfully");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsClocking(false);
+    }
+  };
 
   // Construct general overview cards based on permissions
   const overviewStats: any[] = [];
@@ -214,6 +272,45 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-3xl font-light tracking-tight">Dashboard Overview</h1>
         <p className="text-muted-foreground mt-2">Welcome back, {username || "User"}! Here's what's happening today.</p>
+      </div>
+
+      {/* My Attendance */}
+      <div className="bg-white border rounded-xl p-5 shadow-sm">
+        <h2 className="text-lg font-medium mb-3 flex items-center gap-2">
+          <Clock className="w-5 h-5 text-zinc-500" />
+          My Attendance
+        </h2>
+        {isLoadingAttendance ? (
+          <div className="text-sm text-muted-foreground">Loading status...</div>
+        ) : (
+          <div className="flex items-center gap-4">
+            {attendanceStatus === "not_clocked_in" && (
+              <>
+                <span className="text-sm text-zinc-500">You have not clocked in today.</span>
+                <Button onClick={handleClockIn} disabled={isClocking} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                  {isClocking ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  Clock In
+                </Button>
+              </>
+            )}
+            {attendanceStatus === "clocked_in" && (
+              <>
+                <span className="text-sm font-medium text-emerald-600 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" /> Clocked In
+                </span>
+                <Button onClick={handleClockOut} disabled={isClocking} variant="outline" className="gap-2 border-zinc-300">
+                  {isClocking ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                  Clock Out
+                </Button>
+              </>
+            )}
+            {["clocked_out", "excused", "half_day", "not_excused"].includes(attendanceStatus) && (
+              <span className="text-sm text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-full font-medium">
+                Attendance Finalized for Today
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* General overview stats */}

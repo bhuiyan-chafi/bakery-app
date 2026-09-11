@@ -163,7 +163,7 @@ export default function ProductionPage() {
       const authHeaders = { "Authorization": `Bearer ${token}` };
 
       const [recipesRes, productionsRes, productsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/recipes/`, { headers: authHeaders }),
+        fetch(`${API_BASE_URL}/recipes/names`, { headers: authHeaders }),
         fetch(`${API_BASE_URL}/productions/`, { headers: authHeaders }),
         fetch(`${API_BASE_URL}/products/`, { headers: authHeaders }),
       ]);
