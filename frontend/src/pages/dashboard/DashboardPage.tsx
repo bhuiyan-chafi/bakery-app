@@ -64,7 +64,7 @@ export default function DashboardPage() {
 
     if (canViewOrders) {
       setIsLoadingOrders(true);
-      fetch(`${API_BASE_URL}/orders/stats/7days`, {
+      fetch(`${API_BASE_URL}/orders/stats/today`, {
         headers: { "Authorization": `Bearer ${token}` }
       })
         .then((res) => {
@@ -197,7 +197,7 @@ export default function DashboardPage() {
 
   if (canViewProduction) {
     overviewStats.push({
-      label: "Active Productions",
+      label: "Current Total Product Value",
       value: isLoadingProd ? "..." : String(activeProductions ?? 0),
       icon: PlayCircle,
       trendText: "Currently running",
@@ -211,14 +211,14 @@ export default function DashboardPage() {
         label: "Completed Orders",
         value: isLoadingOrders ? "..." : String(completedOrdersCount ?? 0),
         icon: ShoppingBasket,
-        trendText: "Last 7 days",
+        trendText: "Today",
         isNeutralTrend: true,
       },
       {
         label: "Pending Orders",
         value: isLoadingOrders ? "..." : String(pendingOrdersCount ?? 0),
         icon: Clock,
-        trendText: "Last 7 days",
+        trendText: "Today",
         isNeutralTrend: true,
       },
       {
@@ -227,7 +227,7 @@ export default function DashboardPage() {
           ? "..."
           : "₦" + (totalSalesCount ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
         icon: Banknote,
-        trendText: "Last 7 days",
+        trendText: "Today",
         isNeutralTrend: true,
       }
     );

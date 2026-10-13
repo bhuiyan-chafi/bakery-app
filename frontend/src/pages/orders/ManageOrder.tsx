@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Trash2, Pencil, Eye, X, Printer, Check, ChevronsUpDown, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowLeft, Trash2, Pencil, Eye, X, Printer, Check, ChevronsUpDown, Search, ArrowUpDown, ArrowUp, ArrowDown, Filter, RotateCcw } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -75,22 +75,52 @@ export default function ManageOrder() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [orderIdSearch, setOrderIdSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [soldBySearch, setSoldBySearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: keyof Order, direction: 'asc' | 'desc' } | null>(null);
+
+  const handleResetFilters = () => {
+    setOrderIdSearch("");
+    setStatusFilter("all");
+    setSoldBySearch("");
+    setStartDate("");
+    setEndDate("");
+  };
 
   const filteredAndSortedOrders = useMemo(() => {
     let result = [...orders];
 
-    if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(order => {
-        const dateStr = formatDate(order.created_at).toLowerCase();
-        return (
-          (order.order_number?.toLowerCase().includes(lowerSearch)) ||
-          (order.customer_name?.toLowerCase().includes(lowerSearch)) ||
-          (order.phone?.toLowerCase().includes(lowerSearch)) ||
-          dateStr.includes(lowerSearch)
-        );
+    // 1. Search by Order ID (order_number or uuid)
+    if (orderIdSearch.trim()) {
+      const lower = orderIdSearch.toLowerCase();
+      result = result.filter(o => 
+        (o.order_number?.toLowerCase().includes(lower)) ||
+        (o.uuid?.toLowerCase().includes(lower))
+      );
+    }
+
+    // 2. Search by Status
+    if (statusFilter && statusFilter !== "all") {
+      result = result.filter(o => o.status === statusFilter);
+    }
+
+    // 3. Search by Sold By
+    if (soldBySearch.trim()) {
+      const lower = soldBySearch.toLowerCase();
+      result = result.filter(o => o.sold_by?.toLowerCase().includes(lower));
+    }
+
+    // 4. Search by Date Range (excluding time)
+    if (startDate || endDate) {
+      result = result.filter(o => {
+        if (!o.created_at) return false;
+        const orderDate = o.created_at.split("T")[0]; // YYYY-MM-DD
+        if (startDate && orderDate < startDate) return false;
+        if (endDate && orderDate > endDate) return false;
+        return true;
       });
     }
 
@@ -114,7 +144,7 @@ export default function ManageOrder() {
     }
 
     return result;
-  }, [orders, searchTerm, sortConfig]);
+  }, [orders, orderIdSearch, statusFilter, soldBySearch, startDate, endDate, sortConfig]);
 
   const handleSort = (key: keyof Order) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -440,15 +470,91 @@ export default function ManageOrder() {
           </div>
           <p className="text-muted-foreground">View and manage customer orders. Click a row to see items.</p>
         </div>
-        
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <Input 
-            placeholder="Search orders..." 
-            className="pl-9 h-9 w-full"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      </div>
+
+      {/* ── Field-based Search & Filter Panel ── */}
+      <div className="bg-white border rounded-xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-800 flex items-center gap-2">
+            <Filter className="w-4 h-4 text-zinc-500" />
+            Filter Orders
+          </h2>
+          {(orderIdSearch || statusFilter !== "all" || soldBySearch || startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="h-7 text-xs text-zinc-500 hover:text-black gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset Filters
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Field 1: Search by Order ID */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">Order ID</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+              <Input
+                placeholder="Search order ID..."
+                value={orderIdSearch}
+                onChange={(e) => setOrderIdSearch(e.target.value)}
+                className="pl-8 h-9 text-sm bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Field 2: Search by Status */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 text-sm bg-white">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Field 3: Search by Sold By */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">Sold By</Label>
+            <Input
+              placeholder="Seller username..."
+              value={soldBySearch}
+              onChange={(e) => setSoldBySearch(e.target.value)}
+              className="h-9 text-sm bg-white"
+            />
+          </div>
+
+          {/* Field 4: Date Range (From Date) */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">From Date</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-9 text-sm bg-white"
+            />
+          </div>
+
+          {/* Field 5: Date Range (To Date) */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">To Date</Label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-9 text-sm bg-white"
+            />
+          </div>
         </div>
       </div>
 

@@ -8,3 +8,4 @@ build/
 postgres_data/
 *.md
 docker-compose.dev.yml
+*.pdf

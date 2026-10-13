@@ -320,6 +320,38 @@ def delete_order(order_uuid):
     return jsonify({"message": "Order deleted"}), 200
 
 
+@order_bp.route('/stats/today', methods=['GET'])
+@require_permission('order:view', 'order:manage')
+def get_orders_stats_today():
+    from app.models.order import Order, OrderStatus
+    from datetime import datetime
+
+    now = datetime.utcnow()
+    today_start = datetime(now.year, now.month, now.day)
+
+    completed_count = Order.query.filter(
+        Order.status == OrderStatus.COMPLETE,
+        Order.created_at >= today_start
+    ).count()
+
+    pending_count = Order.query.filter(
+        Order.status == OrderStatus.PENDING,
+        Order.created_at >= today_start
+    ).count()
+
+    total_sales = db.session.query(db.func.sum(Order.total)).filter(
+        Order.status == OrderStatus.COMPLETE,
+        Order.created_at >= today_start
+    ).scalar() or 0.0
+
+    return jsonify({
+        "completed_count": completed_count,
+        "pending_count": pending_count,
+        "total_sales": total_sales,
+        "start_date": today_start.isoformat()
+    }), 200
+
+
 @order_bp.route('/stats/7days', methods=['GET'])
 @require_permission('order:view', 'order:manage')
 def get_orders_stats_7days():

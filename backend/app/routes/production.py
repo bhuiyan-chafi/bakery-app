@@ -7,21 +7,47 @@ production_bp = Blueprint('productions', __name__)
 @production_bp.route('/', methods=['GET'])
 @require_permission('production:view', 'production:manage')
 def get_productions():
-    from app.models.product import Recipe, Production
+    from app.models.product import Recipe, Production, ProductionStatus, ProductTransaction, ProductTransactionType, Product
+    from sqlalchemy import case
+
+    status_order = case(
+        (Production.status == ProductionStatus.COMPLETED, 1),
+        else_=0
+    )
+
     productions = Production.query.order_by(
-        Production.produced_at.desc().nullslast()
-    ).limit(50).all()
+        status_order.asc(),
+        Production.produced_at.desc().nullslast(),
+        Production.uuid.desc()
+    ).limit(100).all()
 
     result = []
     for p in productions:
         recipe = Recipe.query.get(p.recipe_uuid)
+
+        product_txs = ProductTransaction.query.filter_by(
+            production_uuid=p.uuid,
+            transaction_type=ProductTransactionType.IN
+        ).all()
+
+        end_products = []
+        for tx in product_txs:
+            product = Product.query.get(tx.product_uuid)
+            end_products.append({
+                "uuid": tx.uuid,
+                "product_uuid": tx.product_uuid,
+                "product_name": product.name if product else None,
+                "quantity": tx.quantity
+            })
+
         result.append({
             "uuid": p.uuid,
             "recipe_uuid": p.recipe_uuid,
             "recipe_name": recipe.name if recipe else None,
             "status": p.status.value,
             "produced_at": p.produced_at.isoformat() if p.produced_at else None,
-            "notes": p.notes
+            "notes": p.notes,
+            "end_products": end_products
         })
     return jsonify(result), 200
 
@@ -115,58 +141,80 @@ def add_production():
 
 @production_bp.route('/<prod_uuid>', methods=['PUT'])
 @require_permission('production:manage')
-def update_production_status(prod_uuid):
+def update_production(prod_uuid):
     from app.models.product import Production, ProductionStatus, ProductTransaction, ProductTransactionType, Product
     from datetime import datetime as dt
 
     production = Production.query.get_or_404(prod_uuid)
-    data = request.get_json()
+    data = request.get_json() or {}
+
     new_status_val = data.get('status')
+    if new_status_val:
+        try:
+            new_status = ProductionStatus(new_status_val)
+            production.status = new_status
+            if new_status == ProductionStatus.COMPLETED and not production.produced_at:
+                production.produced_at = dt.utcnow()
+        except ValueError:
+            return jsonify({"error": f"Invalid status. Must be one of: {[e.value for e in ProductionStatus]}"}), 400
 
-    if not new_status_val:
-        return jsonify({"error": "status is required"}), 400
+    if 'notes' in data:
+        production.notes = data.get('notes')
 
-    try:
-        new_status = ProductionStatus(new_status_val)
-    except ValueError:
-        return jsonify({"error": f"Invalid status. Must be one of: {[e.value for e in ProductionStatus]}"}), 400
+    if 'end_products' in data:
+        end_products = data.get('end_products')
+        if not isinstance(end_products, list):
+            return jsonify({"error": "end_products must be a list"}), 400
 
-    production.status = new_status
-
-    if new_status == ProductionStatus.COMPLETED:
-        end_products = data.get('end_products', [])
-        
+        validated_items = []
         for ep in end_products:
             prod_id = ep.get('product_uuid')
             qty = ep.get('quantity')
-            
-            if not prod_id or not qty or float(qty) <= 0:
-                return jsonify({"error": "Invalid end products data. Ensure all products have a valid quantity > 0."}), 400
-                
+
+            try:
+                qty_float = float(qty)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Quantity must be a valid number."}), 400
+
+            if not prod_id or qty_float <= 0:
+                return jsonify({"error": "Ensure all products have a valid selection and quantity > 0."}), 400
+
             if not Product.query.get(prod_id):
                 return jsonify({"error": f"Product with ID {prod_id} not found."}), 404
 
+            validated_items.append((prod_id, qty_float))
+
+        # Clear existing IN transactions for this production run
+        ProductTransaction.query.filter_by(
+            production_uuid=production.uuid,
+            transaction_type=ProductTransactionType.IN
+        ).delete()
+
+        # Add updated IN transactions
+        for prod_id, qty_float in validated_items:
             product_tx = ProductTransaction(
                 product_uuid=prod_id,
                 production_uuid=production.uuid,
                 recipe_uuid=production.recipe_uuid,
                 transaction_type=ProductTransactionType.IN,
-                quantity=float(qty),
+                quantity=qty_float,
                 notes=f"Generated from production run {production.uuid}"
             )
             db.session.add(product_tx)
-            
-        production.produced_at = dt.utcnow()
+
+        if production.status == ProductionStatus.COMPLETED and not production.produced_at:
+            production.produced_at = dt.utcnow()
 
     db.session.commit()
-    return jsonify({"message": f"Status updated to '{new_status_val}'"}), 200
+    return jsonify({"message": "Production updated successfully"}), 200
 
 
 @production_bp.route('/<prod_uuid>', methods=['DELETE'])
 @require_permission('production:manage')
 def delete_production(prod_uuid):
-    from app.models.product import Production
+    from app.models.product import Production, ProductTransaction
     production = Production.query.get_or_404(prod_uuid)
+    ProductTransaction.query.filter_by(production_uuid=production.uuid).delete()
     db.session.delete(production)
     db.session.commit()
     return jsonify({"message": "Production deleted"}), 200

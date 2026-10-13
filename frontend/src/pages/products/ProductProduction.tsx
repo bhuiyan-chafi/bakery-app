@@ -26,7 +26,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, PlayCircle, CheckCircle2, Clock, CheckSquare, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, PlayCircle, CheckCircle2, Clock, CheckSquare, Search, ArrowUpDown, ArrowUp, ArrowDown, Pencil, Package, Filter, RotateCcw } from "lucide-react";
 import { API_BASE_URL } from "@/config/constants";
 import { toast } from "react-toastify";
 import { cn } from "@/lib/utils";
@@ -42,6 +42,13 @@ interface Product {
   name: string;
 }
 
+interface EndProductYield {
+  uuid?: string;
+  product_uuid: string;
+  product_name?: string | null;
+  quantity: number;
+}
+
 interface ProductionRecord {
   uuid: string;
   recipe_uuid: string;
@@ -49,6 +56,7 @@ interface ProductionRecord {
   status: "pending" | "running" | "finished" | "completed";
   produced_at: string | null;
   notes: string | null;
+  end_products?: EndProductYield[];
 }
 
 interface EndProductEntry {
@@ -83,19 +91,42 @@ export default function ProductionPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: 'recipe_name' | 'status' | 'produced_at', direction: 'asc' | 'desc' } | null>(null);
+
+  const handleResetFilters = () => {
+    setRecipeSearch("");
+    setStatusFilter("all");
+    setStartDate("");
+    setEndDate("");
+  };
 
   const filteredAndSortedProductions = useMemo(() => {
     let result = [...productions];
 
-    if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter(p => 
-        (p.recipe_name?.toLowerCase().includes(lowerSearch)) ||
-        (p.status?.toLowerCase().includes(lowerSearch)) ||
-        (p.produced_at?.toLowerCase().includes(lowerSearch))
-      );
+    // 1. Search by Recipe Name
+    if (recipeSearch.trim()) {
+      const lower = recipeSearch.toLowerCase();
+      result = result.filter(p => p.recipe_name?.toLowerCase().includes(lower));
+    }
+
+    // 2. Search by Status
+    if (statusFilter && statusFilter !== "all") {
+      result = result.filter(p => p.status === statusFilter);
+    }
+
+    // 3. Search by Date Range (excluding time)
+    if (startDate || endDate) {
+      result = result.filter(p => {
+        if (!p.produced_at) return false;
+        const prodDate = p.produced_at.split("T")[0]; // YYYY-MM-DD
+        if (startDate && prodDate < startDate) return false;
+        if (endDate && prodDate > endDate) return false;
+        return true;
+      });
     }
 
     if (sortConfig) {
@@ -115,10 +146,25 @@ export default function ProductionPage() {
         if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
+    } else {
+      // Completed productions remain below, all active/in-progress on top
+      result.sort((a, b) => {
+        const aCompleted = a.status === "completed" ? 1 : 0;
+        const bCompleted = b.status === "completed" ? 1 : 0;
+        if (aCompleted !== bCompleted) {
+          return aCompleted - bCompleted;
+        }
+        if (aCompleted === 1) {
+          const aTime = a.produced_at ? new Date(a.produced_at).getTime() : 0;
+          const bTime = b.produced_at ? new Date(b.produced_at).getTime() : 0;
+          return bTime - aTime;
+        }
+        return 0;
+      });
     }
 
     return result;
-  }, [productions, searchTerm, sortConfig]);
+  }, [productions, recipeSearch, statusFilter, startDate, endDate, sortConfig]);
 
   const handleSort = (key: 'recipe_name' | 'status' | 'produced_at') => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -137,6 +183,13 @@ export default function ProductionPage() {
 
   // For the finished block
   const [endProductsState, setEndProductsState] = useState<Record<string, EndProductEntry[]>>({});
+
+  // Edit modal state
+  const [editingProduction, setEditingProduction] = useState<ProductionRecord | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editEndProducts, setEditEndProducts] = useState<{ id: string; product_uuid: string; quantity: string }[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Form state
   const [selectedRecipeUuid, setSelectedRecipeUuid] = useState("");
@@ -206,6 +259,80 @@ export default function ProductionPage() {
     setSelectedRecipeUuid(recipes[0]?.uuid || "");
     setNotes("");
     setShortfalls([]);
+  };
+
+  const handleOpenEdit = (prod: ProductionRecord) => {
+    setEditingProduction(prod);
+    setEditNotes(prod.notes || "");
+    if (prod.end_products && prod.end_products.length > 0) {
+      setEditEndProducts(
+        prod.end_products.map(ep => ({
+          id: crypto.randomUUID(),
+          product_uuid: ep.product_uuid,
+          quantity: String(ep.quantity)
+        }))
+      );
+    } else {
+      setEditEndProducts([
+        { id: crypto.randomUUID(), product_uuid: products[0]?.uuid || "", quantity: "1" }
+      ]);
+    }
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduction) return;
+
+    if (editingProduction.status === "completed") {
+      if (editEndProducts.length === 0) {
+        toast.error("Please add at least one product yield for a completed production");
+        return;
+      }
+      for (const entry of editEndProducts) {
+        if (!entry.product_uuid) {
+          toast.error("Please select a product for all rows");
+          return;
+        }
+        if (!entry.quantity || parseFloat(entry.quantity) <= 0) {
+          toast.error("All product quantities must be greater than zero");
+          return;
+        }
+      }
+    }
+
+    setIsUpdating(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload: any = {
+        notes: editNotes || null,
+        end_products: editEndProducts.map(e => ({
+          product_uuid: e.product_uuid,
+          quantity: parseFloat(e.quantity)
+        }))
+      };
+
+      const res = await fetch(`${API_BASE_URL}/productions/${editingProduction.uuid}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update production");
+
+      toast.success("Production updated successfully!");
+      setIsEditModalOpen(false);
+      setEditingProduction(null);
+      fetchAll();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleRecord = async (e: React.FormEvent) => {
@@ -431,19 +558,89 @@ export default function ProductionPage() {
         )}
       </div>
 
-      {/* Production Log */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-base font-semibold">Production Log</h2>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-            <Input 
-              placeholder="Search production..." 
-              className="pl-9 h-9 w-full bg-white"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+      {/* ── Field-based Search & Filter Panel ── */}
+      <div className="bg-white border rounded-xl p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-800 flex items-center gap-2">
+            <Filter className="w-4 h-4 text-zinc-500" />
+            Filter Productions
+          </h2>
+          {(recipeSearch || statusFilter !== "all" || startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="h-7 text-xs text-zinc-500 hover:text-black gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset Filters
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Option 1: Search by Recipe Name */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">Recipe Name</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+              <Input
+                placeholder="Search recipe..."
+                value={recipeSearch}
+                onChange={(e) => setRecipeSearch(e.target.value)}
+                className="pl-8 h-9 text-sm bg-white"
+              />
+            </div>
+          </div>
+
+          {/* Option 2: Search by Status */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">Status</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 text-sm bg-white">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="running">Running</SelectItem>
+                <SelectItem value="finished">Finished</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Option 3: Search by Date Range (From Date) */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">From Date</Label>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-9 text-sm bg-white"
             />
           </div>
+
+          {/* Option 3: Search by Date Range (To Date) */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-600 font-medium">To Date</Label>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-9 text-sm bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Production Log Table */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Production Log</h2>
+          <span className="text-xs text-muted-foreground">
+            Showing {filteredAndSortedProductions.length} of {productions.length} records
+          </span>
         </div>
         <div className="bg-white border rounded-md overflow-hidden">
           <Table>
@@ -451,6 +648,7 @@ export default function ProductionPage() {
               <TableRow className="bg-zinc-50/50">
                 <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('recipe_name')}>Recipe <SortIcon columnKey="recipe_name" /></TableHead>
                 <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('status')}>Status <SortIcon columnKey="status" /></TableHead>
+                <TableHead className="font-medium">Products Produced</TableHead>
                 <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('produced_at')}>Completed At <SortIcon columnKey="produced_at" /></TableHead>
                 <TableHead className="font-medium">Notes</TableHead>
                 {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
@@ -459,11 +657,11 @@ export default function ProductionPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 5 : 4} className="text-center py-10 text-muted-foreground italic">Loading...</TableCell>
+                  <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">Loading...</TableCell>
                 </TableRow>
               ) : filteredAndSortedProductions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 5 : 4} className="text-center py-10 text-muted-foreground italic">No production records found.</TableCell>
+                  <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">No production records found.</TableCell>
                 </TableRow>
               ) : (
                 filteredAndSortedProductions.map((p) => {
@@ -478,6 +676,20 @@ export default function ProductionPage() {
                             <StatusIcon status={p.status} />
                             {cfg.label}
                           </span>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {p.end_products && p.end_products.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {p.end_products.map((ep, idx) => (
+                                <span key={idx} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-zinc-100 text-zinc-800 border border-zinc-200">
+                                  <Package className="w-3 h-3 mr-1 text-zinc-500" />
+                                  {ep.quantity} × {ep.product_name || "Product"}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400 italic text-xs">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-zinc-500 text-sm">{formatDate(p.produced_at)}</TableCell>
                         <TableCell className="text-zinc-500 italic text-sm max-w-[200px] truncate">{p.notes || "—"}</TableCell>
@@ -500,6 +712,14 @@ export default function ProductionPage() {
                               )}
                               <Button
                                 variant="ghost" size="icon"
+                                className="h-8 w-8 text-zinc-400 hover:text-blue-600"
+                                onClick={() => handleOpenEdit(p)}
+                                title="Edit Production"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon"
                                 className="h-8 w-8 text-zinc-400 hover:text-red-600"
                                 onClick={() => handleDelete(p.uuid)}
                               >
@@ -513,7 +733,7 @@ export default function ProductionPage() {
                       {/* Expanded End-Product Block for FINISHED status */}
                       {canManage && p.status === "finished" && (
                         <TableRow className="bg-purple-50/30">
-                          <TableCell colSpan={5} className="px-6 py-4">
+                          <TableCell colSpan={6} className="px-6 py-4">
                             <div className="bg-white border border-purple-100 rounded-md p-4 shadow-sm">
                               <div className="flex items-center justify-between mb-3">
                                 <div>
@@ -658,6 +878,139 @@ export default function ProductionPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Production Modal ── */}
+      <Dialog open={isEditModalOpen} onOpenChange={(open) => { setIsEditModalOpen(open); if (!open) setEditingProduction(null); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Edit Production</DialogTitle>
+          </DialogHeader>
+
+          {editingProduction && (
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-1">
+              {/* Recipe & Status Summary */}
+              <div className="flex items-center justify-between p-3 bg-zinc-50 border rounded-lg text-sm">
+                <div>
+                  <span className="text-xs text-muted-foreground block">Recipe</span>
+                  <span className="font-medium">{editingProduction.recipe_name}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-muted-foreground block">Current Status</span>
+                  <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", statusConfig[editingProduction.status]?.color)}>
+                    <StatusIcon status={editingProduction.status} />
+                    {statusConfig[editingProduction.status]?.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* Produced Products Yield list */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="font-medium text-sm">
+                    Products Produced {editingProduction.status === "completed" && <span className="text-red-500">*</span>}
+                  </Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setEditEndProducts(prev => [
+                        ...prev,
+                        { id: crypto.randomUUID(), product_uuid: products[0]?.uuid || "", quantity: "1" }
+                      ]);
+                    }}
+                  >
+                    <Plus className="w-3 h-3 mr-1" /> Add Product
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Adjust the number of products yielded from this production. Changes immediately update the product inventory.
+                </p>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {editEndProducts.map((row) => (
+                    <div key={row.id} className="flex items-center gap-2">
+                      <Select
+                        value={row.product_uuid}
+                        onValueChange={(val) => {
+                          setEditEndProducts(prev => prev.map(r => r.id === row.id ? { ...r, product_uuid: val } : r));
+                        }}
+                      >
+                        <SelectTrigger className="flex-1 h-8 text-sm bg-white">
+                          <SelectValue placeholder="Select product..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products.map(prod => (
+                            <SelectItem key={prod.uuid} value={prod.uuid}>{prod.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        placeholder="Qty"
+                        value={row.quantity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditEndProducts(prev => prev.map(r => r.id === row.id ? { ...r, quantity: val } : r));
+                        }}
+                        className="w-24 h-8 text-sm bg-white"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-zinc-400 hover:text-red-600 shrink-0"
+                        onClick={() => {
+                          setEditEndProducts(prev => prev.filter(r => r.id !== row.id));
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {editEndProducts.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic py-2 text-center border border-dashed rounded p-3">
+                      No products logged. Click "Add Product" above to record output.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label htmlFor="edit-prod-notes">Notes <span className="text-zinc-400 text-xs">(optional)</span></Label>
+                <Textarea
+                  id="edit-prod-notes"
+                  placeholder="Notes about this production run..."
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  disabled={isUpdating}
+                  className="min-h-[70px] resize-y text-sm"
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setIsEditModalOpen(false); setEditingProduction(null); }}
+                  disabled={isUpdating}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isUpdating} className="bg-black text-white hover:bg-zinc-800">
+                  {isUpdating ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
