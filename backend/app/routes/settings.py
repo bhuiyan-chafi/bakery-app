@@ -13,7 +13,7 @@ settings_bp = Blueprint('settings', __name__)
     'settings:measurement-unit',
     'inventory:view', 'inventory:add', 'inventory:view-purchase', 'inventory:manage-purchase',
     'recipe:view', 'recipe:manage',
-    'production:view', 'production:manage',
+    'production:view', 'production:add', 'production:edit', 'production:delete',
     'product:view', 'product:manage',
     'user:manage'
 )

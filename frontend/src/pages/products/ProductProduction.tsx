@@ -81,8 +81,11 @@ const nextStatus: Record<string, string | null> = {
 
 export default function ProductionPage() {
   const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
-  const canView = hasAnyPermission("production:view", "production:manage");
-  const canManage = hasPermission("production:manage");
+  const canView = hasAnyPermission("production:view", "production:add", "production:edit", "production:delete");
+  const canAdd = hasPermission("production:add");
+  const canEdit = hasPermission("production:edit");
+  const canDelete = hasPermission("production:delete");
+  const hasActionColumn = canEdit || canDelete;
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -547,7 +550,7 @@ export default function ProductionPage() {
           </p>
         </div>
 
-        {canManage && (
+        {canAdd && (
           <Button
             onClick={() => { resetForm(); setIsModalOpen(true); }}
             className="bg-black text-white hover:bg-zinc-800 shrink-0 mt-1"
@@ -651,17 +654,17 @@ export default function ProductionPage() {
                 <TableHead className="font-medium">Products Produced</TableHead>
                 <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('produced_at')}>Completed At <SortIcon columnKey="produced_at" /></TableHead>
                 <TableHead className="font-medium">Notes</TableHead>
-                {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
+                {hasActionColumn && <TableHead className="text-right font-medium">Action</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">Loading...</TableCell>
+                  <TableCell colSpan={hasActionColumn ? 6 : 5} className="text-center py-10 text-muted-foreground italic">Loading...</TableCell>
                 </TableRow>
               ) : filteredAndSortedProductions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">No production records found.</TableCell>
+                  <TableCell colSpan={hasActionColumn ? 6 : 5} className="text-center py-10 text-muted-foreground italic">No production records found.</TableCell>
                 </TableRow>
               ) : (
                 filteredAndSortedProductions.map((p) => {
@@ -693,10 +696,10 @@ export default function ProductionPage() {
                         </TableCell>
                         <TableCell className="text-zinc-500 text-sm">{formatDate(p.produced_at)}</TableCell>
                         <TableCell className="text-zinc-500 italic text-sm max-w-[200px] truncate">{p.notes || "—"}</TableCell>
-                        {canManage && (
+                        {hasActionColumn && (
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              {next && next !== "completed" && (
+                              {canEdit && next && next !== "completed" && (
                                 <Button
                                   variant="ghost" size="sm"
                                   className={cn(
@@ -710,30 +713,35 @@ export default function ProductionPage() {
                                   {next === "running" ? "Start" : "Finish"}
                                 </Button>
                               )}
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-8 w-8 text-zinc-400 hover:text-blue-600"
-                                onClick={() => handleOpenEdit(p)}
-                                title="Edit Production"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-8 w-8 text-zinc-400 hover:text-red-600"
-                                onClick={() => handleDelete(p.uuid)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {canEdit && (
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 text-zinc-400 hover:text-blue-600"
+                                  onClick={() => handleOpenEdit(p)}
+                                  title="Edit Production"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 text-zinc-400 hover:text-red-600"
+                                  onClick={() => handleDelete(p.uuid)}
+                                  title="Delete Production"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         )}
                       </TableRow>
 
                       {/* Expanded End-Product Block for FINISHED status */}
-                      {canManage && p.status === "finished" && (
+                      {canEdit && p.status === "finished" && (
                         <TableRow className="bg-purple-50/30">
-                          <TableCell colSpan={6} className="px-6 py-4">
+                          <TableCell colSpan={hasActionColumn ? 6 : 5} className="px-6 py-4">
                             <div className="bg-white border border-purple-100 rounded-md p-4 shadow-sm">
                               <div className="flex items-center justify-between mb-3">
                                 <div>

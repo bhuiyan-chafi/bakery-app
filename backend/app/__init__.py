@@ -67,7 +67,7 @@ def create_app():
             'user:manage',
             'product:view', 'product:manage',
             'recipe:view', 'recipe:manage',
-            'production:view', 'production:manage',
+            'production:view', 'production:add', 'production:edit', 'production:delete',
             'inventory:view', 'inventory:add',
             'inventory:view-purchase', 'inventory:manage-purchase',
             'order:view', 'order:manage',
@@ -125,6 +125,40 @@ def create_app():
                 admin_perm.status = UserPermissionStatus.ACTIVE
                 db.session.commit()
                 print(f"Activated '{perm_name}' permission for '{admin_username}'.")
+
+        # 4. Migrate users who currently have 'production:manage' to the 3 granular permissions, then remove 'production:manage'
+        manage_perm = Permission.query.filter_by(name='production:manage').first()
+        if manage_perm:
+            active_managers = UserPermission.query.filter_by(
+                permission_uuid=manage_perm.uuid,
+                status=UserPermissionStatus.ACTIVE
+            ).all()
+            for up in active_managers:
+                for sub_name in ['production:add', 'production:edit', 'production:delete']:
+                    sub_perm = perm_objects.get(sub_name)
+                    if sub_perm:
+                        user_sub = UserPermission.query.filter_by(
+                            user_uuid=up.user_uuid,
+                            permission_uuid=sub_perm.uuid
+                        ).first()
+                        if not user_sub:
+                            db.session.add(UserPermission(
+                                user_uuid=up.user_uuid,
+                                permission_uuid=sub_perm.uuid,
+                                status=UserPermissionStatus.ACTIVE
+                            ))
+                            db.session.commit()
+                            print(f"Granted '{sub_name}' to user '{up.user_uuid}'.")
+                        elif user_sub.status != UserPermissionStatus.ACTIVE:
+                            user_sub.status = UserPermissionStatus.ACTIVE
+                            db.session.commit()
+
+            # Remove legacy production:manage completely from DB
+            UserPermission.query.filter_by(permission_uuid=manage_perm.uuid).delete()
+            db.session.delete(manage_perm)
+            db.session.commit()
+            print("Legacy 'production:manage' permission removed from database.")
+
 
 
     @app.route('/health')

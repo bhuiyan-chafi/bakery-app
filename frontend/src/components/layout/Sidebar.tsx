@@ -11,7 +11,7 @@ const menuItems = [
   { label: "Dashboard",  icon: LayoutDashboard, path: "/dashboard" },
   { label: "Products",   icon: ShoppingBasket,  path: "/products", permissions: ["product:view", "product:manage"] },
   { label: "Recipes",    icon: ChefHat,         path: "/recipes", permissions: ["recipe:view", "recipe:manage"] },
-  { label: "Production", icon: Factory,         path: "/production", permissions: ["production:view", "production:manage"] },
+  { label: "Production", icon: Factory,         path: "/production", permissions: ["production:view", "production:add", "production:edit", "production:delete"] },
   { label: "Inventory",  icon: Package,          path: "/inventory", permissions: ["inventory:view", "inventory:add", "inventory:view-purchase", "inventory:manage-purchase"] },
   { label: "Orders",     icon: ClipboardList,    path: "/orders", permissions: ["order:view", "order:manage"] },
   { label: "Sale",       icon: ShoppingBag,      path: "/sale", permissions: ["sale:view"] },

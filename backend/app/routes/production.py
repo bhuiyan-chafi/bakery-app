@@ -5,7 +5,7 @@ from app.utils.decorators import require_permission
 production_bp = Blueprint('productions', __name__)
 
 @production_bp.route('/', methods=['GET'])
-@require_permission('production:view', 'production:manage')
+@require_permission('production:view', 'production:add', 'production:edit', 'production:delete')
 def get_productions():
     from app.models.product import Recipe, Production, ProductionStatus, ProductTransaction, ProductTransactionType, Product
     from sqlalchemy import case
@@ -53,7 +53,7 @@ def get_productions():
 
 
 @production_bp.route('/', methods=['POST'])
-@require_permission('production:manage')
+@require_permission('production:add')
 def add_production():
     from app.models.product import Recipe, Production, ProductionStatus
     from app.models.inventory import Inventory, InventoryTransaction, TransactionType, TransactionStatus
@@ -140,7 +140,7 @@ def add_production():
 
 
 @production_bp.route('/<prod_uuid>', methods=['PUT'])
-@require_permission('production:manage')
+@require_permission('production:edit')
 def update_production(prod_uuid):
     from app.models.product import Production, ProductionStatus, ProductTransaction, ProductTransactionType, Product
     from datetime import datetime as dt
@@ -210,7 +210,7 @@ def update_production(prod_uuid):
 
 
 @production_bp.route('/<prod_uuid>', methods=['DELETE'])
-@require_permission('production:manage')
+@require_permission('production:delete')
 def delete_production(prod_uuid):
     from app.models.product import Production, ProductTransaction
     production = Production.query.get_or_404(prod_uuid)
@@ -221,7 +221,7 @@ def delete_production(prod_uuid):
 
 
 @production_bp.route('/active', methods=['GET'])
-@require_permission('production:view', 'production:manage')
+@require_permission('production:view', 'production:add', 'production:edit', 'production:delete')
 def get_active_productions_count():
     from app.models.product import Production, ProductionStatus
     count = Production.query.filter_by(status=ProductionStatus.RUNNING).count()

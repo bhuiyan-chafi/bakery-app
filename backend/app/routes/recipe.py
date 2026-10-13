@@ -36,7 +36,7 @@ def list_recipes():
 
 
 @recipe_bp.route('/names', methods=['GET'])
-@require_permission('recipe:view', 'recipe:manage', 'production:manage')
+@require_permission('recipe:view', 'recipe:manage', 'production:view', 'production:add', 'production:edit', 'production:delete')
 def list_recipe_names():
     from app.models.product import Recipe
     recipes = Recipe.query.order_by(Recipe.name).all()

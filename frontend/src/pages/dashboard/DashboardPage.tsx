@@ -9,7 +9,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 export default function DashboardPage() {
   const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
-  const canViewProduction = hasAnyPermission("production:view", "production:manage");
+  const canViewProduction = hasAnyPermission("production:view", "production:add", "production:edit", "production:delete");
   const canViewOrders = hasAnyPermission("order:view", "order:manage");
   const canViewAccounts = hasAnyPermission("account:view", "account:manage");
   const canViewMyDeliveries = hasPermission("sale:orders");
