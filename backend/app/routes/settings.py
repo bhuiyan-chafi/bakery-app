@@ -156,10 +156,15 @@ def download_backup():
 
     # Strip python driver (e.g. +psycopg2) for PostgreSQL CLI tools
     cli_db_url = database_url.replace('+psycopg2', '').replace('+psycopg', '')
-    bash_cmd = f"pg_dump '{cli_db_url}' | gzip > {filepath}"
+    
+    dump_sql = os.path.join("/tmp", f"db_backup_{timestamp}.sql")
+    dump_cmd = f'pg_dump --no-owner --no-privileges "{cli_db_url}" -f "{dump_sql}"'
     
     try:
-        subprocess.run(bash_cmd, shell=True, check=True)
+        subprocess.run(dump_cmd, shell=True, check=True)
+        if not os.path.exists(dump_sql) or os.path.getsize(dump_sql) < 50:
+            return jsonify({"error": "Generated database dump is empty or invalid"}), 500
+        subprocess.run(f'gzip -f "{dump_sql}"', shell=True, check=True)
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"Failed to generate backup: {e}"}), 500
         
@@ -197,9 +202,22 @@ def upload_backup():
 
     # Save uploaded file
     filepath = os.path.join("/tmp", "restore_upload.sql.gz")
+    restore_sql = os.path.join("/tmp", "restore_upload.sql")
     file.save(filepath)
 
+    if not os.path.exists(filepath) or os.path.getsize(filepath) < 50:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        return jsonify({"error": "Uploaded backup file is empty or corrupted (under 50 bytes)."}), 400
+
     try:
+        # Decompress uploaded file first to verify it contains valid SQL statements
+        decompress_cmd = f'zcat -f "{filepath}" > "{restore_sql}"'
+        subprocess.run(decompress_cmd, shell=True, check=True)
+
+        if not os.path.exists(restore_sql) or os.path.getsize(restore_sql) < 50:
+            return jsonify({"error": "Extracted backup file contains no data or invalid content."}), 400
+
         from app.extensions import db
         from sqlalchemy import text
         
@@ -219,10 +237,12 @@ def upload_backup():
         clean_cmd = f'psql "{cli_db_url}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
         subprocess.run(clean_cmd, shell=True, check=True)
         
-        # Then, restore the backup
-        # zcat -f safely handles BOTH gzipped (.sql.gz) and plain (.sql) files
-        restore_cmd = f'zcat -f "{filepath}" | psql "{cli_db_url}"'
+        # Then, restore the backup using the verified SQL file
+        restore_cmd = f'psql "{cli_db_url}" -f "{restore_sql}"'
         subprocess.run(restore_cmd, shell=True, check=True)
+
+        # Ensure all tables and seed data exist (e.g. if backup was data-only or missing tables)
+        db.create_all()
 
         # Run seed-db to ensure newly restored schema has all current permissions and migrations
         subprocess.run('flask seed-db', shell=True, check=True)
@@ -232,9 +252,14 @@ def upload_backup():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        for f in (filepath, restore_sql):
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
             
     return jsonify({"message": "Database restored successfully. Please log in again."}), 200
+
 
 
