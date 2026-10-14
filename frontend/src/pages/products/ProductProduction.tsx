@@ -85,7 +85,7 @@ export default function ProductionPage() {
   const canAdd = hasPermission("production:add");
   const canEdit = hasPermission("production:edit");
   const canDelete = hasPermission("production:delete");
-  const hasActionColumn = canEdit || canDelete;
+  const hasActionColumn = canAdd || canEdit || canDelete;
 
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -699,7 +699,7 @@ export default function ProductionPage() {
                         {hasActionColumn && (
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              {canEdit && next && next !== "completed" && (
+                              {(canAdd || canEdit) && next && next !== "completed" && (
                                 <Button
                                   variant="ghost" size="sm"
                                   className={cn(
@@ -733,13 +733,16 @@ export default function ProductionPage() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               )}
+                              {!((canAdd || canEdit) && next && next !== "completed") && !canEdit && !canDelete && (
+                                <span className="text-zinc-400 text-xs italic">—</span>
+                              )}
                             </div>
                           </TableCell>
                         )}
                       </TableRow>
 
                       {/* Expanded End-Product Block for FINISHED status */}
-                      {canEdit && p.status === "finished" && (
+                      {(canAdd || canEdit) && p.status === "finished" && (
                         <TableRow className="bg-purple-50/30">
                           <TableCell colSpan={hasActionColumn ? 6 : 5} className="px-6 py-4">
                             <div className="bg-white border border-purple-100 rounded-md p-4 shadow-sm">

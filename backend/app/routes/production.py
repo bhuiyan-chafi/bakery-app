@@ -140,12 +140,28 @@ def add_production():
 
 
 @production_bp.route('/<prod_uuid>', methods=['PUT'])
-@require_permission('production:edit')
+@require_permission('production:add', 'production:edit')
 def update_production(prod_uuid):
     from app.models.product import Production, ProductionStatus, ProductTransaction, ProductTransactionType, Product
+    from app.models.user import User, UserPermissionStatus
+    from flask_jwt_extended import get_jwt_identity
     from datetime import datetime as dt
 
     production = Production.query.get_or_404(prod_uuid)
+
+    # If the production is already completed, only users with 'production:edit' can modify it
+    if production.status == ProductionStatus.COMPLETED:
+        current_user_id = get_jwt_identity()
+        user = User.query.get(current_user_id)
+        user_active_perms = {
+            up.permission.name
+            for up in user.permissions
+            if (up.status.value if hasattr(up.status, 'value') else up.status) == UserPermissionStatus.ACTIVE.value
+        } if user else set()
+
+        if 'production:edit' not in user_active_perms:
+            return jsonify({"error": "You do not have permission (production:edit) to modify completed productions"}), 403
+
     data = request.get_json() or {}
 
     new_status_val = data.get('status')
