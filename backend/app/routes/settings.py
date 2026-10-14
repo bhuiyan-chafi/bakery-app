@@ -154,7 +154,9 @@ def download_backup():
     if not database_url:
         return jsonify({"error": "DATABASE_URL not set"}), 500
 
-    bash_cmd = f"pg_dump '{database_url}' | gzip > {filepath}"
+    # Strip python driver (e.g. +psycopg2) for PostgreSQL CLI tools
+    cli_db_url = database_url.replace('+psycopg2', '').replace('+psycopg', '')
+    bash_cmd = f"pg_dump '{cli_db_url}' | gzip > {filepath}"
     
     try:
         subprocess.run(bash_cmd, shell=True, check=True)
@@ -190,6 +192,9 @@ def upload_backup():
     if not database_url:
         return jsonify({"error": "DATABASE_URL not set"}), 500
 
+    # Strip python driver (e.g. +psycopg2) for PostgreSQL CLI tools
+    cli_db_url = database_url.replace('+psycopg2', '').replace('+psycopg', '')
+
     # Save uploaded file
     filepath = os.path.join("/tmp", "restore_upload.sql.gz")
     file.save(filepath)
@@ -211,13 +216,16 @@ def upload_backup():
         
         # First, drop and recreate the public schema to ensure a clean slate
         # This prevents duplicate key errors when restoring over existing data
-        clean_cmd = f'psql "{database_url}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
+        clean_cmd = f'psql "{cli_db_url}" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"'
         subprocess.run(clean_cmd, shell=True, check=True)
         
         # Then, restore the backup
         # zcat -f safely handles BOTH gzipped (.sql.gz) and plain (.sql) files
-        restore_cmd = f'zcat -f "{filepath}" | psql "{database_url}"'
+        restore_cmd = f'zcat -f "{filepath}" | psql "{cli_db_url}"'
         subprocess.run(restore_cmd, shell=True, check=True)
+
+        # Run seed-db to ensure newly restored schema has all current permissions and migrations
+        subprocess.run('flask seed-db', shell=True, check=True)
         
     except subprocess.CalledProcessError as e:
         return jsonify({"error": f"Database restoration failed: {e}"}), 500
