@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   Table,
@@ -9,7 +9,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, ListTree, ChevronsUpDown, Check, Search, ArrowUpDown, ArrowUp, ArrowDown, Filter, RotateCcw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -47,12 +54,26 @@ interface Product {
   price: number;
   stock_threshold: number;
   current_stock: number;
+  opening_stock?: number;
+  produced_in_period?: number;
+  sold_in_period?: number;
+  all_sold_in_period?: number;
+  closing_stock?: number;
+  sold_amount?: number;
 }
 
 interface Category {
   uuid: string;
   name: string;
 }
+
+interface Salesman {
+  uuid: string;
+  username: string;
+  name: string;
+}
+
+type SortKey = keyof Product | 'total_amount' | 'closing_value';
 
 export default function ProductPage() {
   const { hasPermission, hasAnyPermission, isLoading: isLoadingPermissions } = usePermissions();
@@ -62,9 +83,24 @@ export default function ProductPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+  const [salesmen, setSalesmen] = useState<Salesman[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Product | 'total_amount', direction: 'asc' | 'desc' } | null>(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [selectedSalesman, setSelectedSalesman] = useState("all");
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' } | null>(null);
+
+  const isDateFilterActive = Boolean(startDate || endDate);
+  const isSalesmanFilterActive = Boolean(selectedSalesman && selectedSalesman !== "all");
+  const isSnapshotActive = isDateFilterActive || isSalesmanFilterActive;
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStartDate("");
+    setEndDate("");
+    setSelectedSalesman("all");
+  };
 
   const filteredAndSortedProducts = useMemo(() => {
     let result = [...products];
@@ -79,8 +115,16 @@ export default function ProductPage() {
 
     if (sortConfig) {
       result.sort((a, b) => {
-        let aValue: any = sortConfig.key === 'total_amount' ? (a.price * (a.current_stock ?? 0)) : a[sortConfig.key as keyof Product];
-        let bValue: any = sortConfig.key === 'total_amount' ? (b.price * (b.current_stock ?? 0)) : b[sortConfig.key as keyof Product];
+        let aValue: any;
+        let bValue: any;
+
+        if (sortConfig.key === 'total_amount' || sortConfig.key === 'closing_value') {
+          aValue = a.price * (a.closing_stock ?? a.current_stock ?? 0);
+          bValue = b.price * (b.closing_stock ?? b.current_stock ?? 0);
+        } else {
+          aValue = a[sortConfig.key as keyof Product] ?? 0;
+          bValue = b[sortConfig.key as keyof Product] ?? 0;
+        }
 
         if (typeof aValue === 'string' && typeof bValue === 'string') {
           aValue = aValue.toLowerCase();
@@ -96,7 +140,26 @@ export default function ProductPage() {
     return result;
   }, [products, searchTerm, sortConfig]);
 
-  const handleSort = (key: keyof Product | 'total_amount') => {
+  const summaryStats = useMemo(() => {
+    return filteredAndSortedProducts.reduce(
+      (acc, p) => {
+        const produced = p.produced_in_period ?? 0;
+        const sold = p.sold_in_period ?? 0;
+        const soldVal = p.sold_amount ?? (sold * p.price);
+        const closingUnits = p.closing_stock ?? p.current_stock ?? 0;
+        const closingVal = closingUnits * p.price;
+
+        acc.totalProduced += produced;
+        acc.totalSold += sold;
+        acc.totalSoldAmount += soldVal;
+        acc.totalClosingValue += closingVal;
+        return acc;
+      },
+      { totalProduced: 0, totalSold: 0, totalSoldAmount: 0, totalClosingValue: 0 }
+    );
+  }, [filteredAndSortedProducts]);
+
+  const handleSort = (key: SortKey) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
@@ -104,7 +167,7 @@ export default function ProductPage() {
     setSortConfig({ key, direction });
   };
 
-  const SortIcon = ({ columnKey }: { columnKey: keyof Product | 'total_amount' }) => {
+  const SortIcon = ({ columnKey }: { columnKey: SortKey }) => {
     if (sortConfig?.key !== columnKey) return <ArrowUpDown className="ml-1 w-3 h-3 inline text-zinc-300" />;
     return sortConfig.direction === 'asc' 
       ? <ArrowUp className="ml-1 w-3 h-3 inline text-black" />
@@ -123,19 +186,20 @@ export default function ProductPage() {
   const [price, setPrice] = useState("0");
   const [stockThreshold, setStockThreshold] = useState("0");
 
-  useEffect(() => {
-    if (canView) {
-      fetchProducts();
-      fetchCategories();
-    } else if (!isLoadingPermissions) {
-      setIsLoading(false);
-    }
-  }, [canView, isLoadingPermissions]);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
+    setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_BASE_URL}/products/`, {
+      const params = new URLSearchParams();
+      if (startDate) params.set("start_date", startDate);
+      if (endDate) params.set("end_date", endDate);
+      if (selectedSalesman && selectedSalesman !== "all") {
+        params.set("salesman", selectedSalesman);
+      }
+      const queryStr = params.toString();
+      const url = queryStr ? `${API_BASE_URL}/products/?${queryStr}` : `${API_BASE_URL}/products/`;
+
+      const response = await fetch(url, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (!response.ok) throw new Error("Failed to fetch products");
@@ -146,7 +210,37 @@ export default function ProductPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [startDate, endDate, selectedSalesman]);
+
+  const fetchSalesmen = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_BASE_URL}/orders/salesmen`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSalesmen(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
+  useEffect(() => {
+    if (canView) {
+      fetchCategories();
+      fetchSalesmen();
+    } else if (!isLoadingPermissions) {
+      setIsLoading(false);
+    }
+  }, [canView, isLoadingPermissions, fetchSalesmen]);
+
+  useEffect(() => {
+    if (canView) {
+      fetchProducts();
+    }
+  }, [canView, fetchProducts]);
 
   const fetchCategories = async () => {
     try {
@@ -400,16 +494,130 @@ export default function ProductPage() {
           )}
           </div>
         </div>
-        <div className="relative w-full sm:w-72 mt-2 sm:mt-0">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <Input 
-            placeholder="Search products..." 
-            className="pl-9 h-9 w-full bg-white"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      </div>
+
+      {/* Stock Snapshot & Salesman Reconciliation Filter Panel */}
+      <div className="bg-white rounded-md border shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+            <Filter className="w-4 h-4 text-zinc-500" />
+            <span>Stock Snapshot & Salesman Filter</span>
+            {isSnapshotActive && (
+              <span className="ml-1 px-2 py-0.5 text-xs rounded-full bg-zinc-900 text-white font-normal">
+                Snapshot Active
+              </span>
+            )}
+          </div>
+          {(searchTerm || isSnapshotActive) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetFilters}
+              className="h-8 text-xs text-zinc-600 hover:text-black flex items-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Filters
+            </Button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Product / Category search */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Product / Category</Label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <Input 
+                placeholder="Search products..." 
+                className="pl-9 h-9 w-full bg-white"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* From Date */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">From Date (or Single Date)</Label>
+            <Input
+              type="date"
+              className="h-9 bg-white"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+
+          {/* To Date */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">To Date (Optional Range)</Label>
+            <Input
+              type="date"
+              className="h-9 bg-white"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
+
+          {/* Salesman / Driver Filter */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-500">Salesman / Delivery Person</Label>
+            <Select value={selectedSalesman} onValueChange={setSelectedSalesman}>
+              <SelectTrigger className="h-9 bg-white">
+                <SelectValue placeholder="All Salesmen (Storewide)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Salesmen (Storewide)</SelectItem>
+                {salesmen.map((s) => (
+                  <SelectItem key={s.uuid} value={s.username}>
+                    {s.name && s.name !== s.username ? `${s.name} (${s.username})` : s.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
+
+      {/* Reconciliation Summary Cards when Snapshot/Filter is Active */}
+      {isSnapshotActive && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white rounded-md border shadow-sm p-4">
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">
+              Total Produced (+ IN)
+            </p>
+            <p className="text-2xl font-semibold text-emerald-700 mt-1">
+              +{summaryStats.totalProduced.toLocaleString("en-US")} <span className="text-sm font-normal text-zinc-500">units</span>
+            </p>
+          </div>
+
+          <div className="bg-white rounded-md border shadow-sm p-4">
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">
+              {isSalesmanFilterActive ? `Units Sold by ${selectedSalesman}` : "Total Units Sold (- OUT)"}
+            </p>
+            <p className="text-2xl font-semibold text-blue-700 mt-1">
+              {summaryStats.totalSold.toLocaleString("en-US")} <span className="text-sm font-normal text-zinc-500">units</span>
+            </p>
+          </div>
+
+          <div className="bg-emerald-50/70 rounded-md border border-emerald-200 shadow-sm p-4">
+            <p className="text-xs text-emerald-800 font-medium uppercase tracking-wide">
+              {isSalesmanFilterActive ? `Expected Amount (${selectedSalesman})` : "Total Sold Value"}
+            </p>
+            <p className="text-2xl font-semibold text-emerald-900 mt-1">
+              ₦ {summaryStats.totalSoldAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          <div className="bg-white rounded-md border shadow-sm p-4">
+            <p className="text-xs text-zinc-500 font-medium uppercase tracking-wide">
+              Closing Stock Value
+            </p>
+            <p className="text-2xl font-semibold text-zinc-900 mt-1">
+              ₦ {summaryStats.totalClosingValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-md border shadow-sm overflow-hidden">
@@ -419,37 +627,93 @@ export default function ProductPage() {
               <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('name')}>Name <SortIcon columnKey="name" /></TableHead>
               <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('category_name')}>Category <SortIcon columnKey="category_name" /></TableHead>
               <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('price')}>Price <SortIcon columnKey="price" /></TableHead>
-              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('current_stock')}>Current Stock <SortIcon columnKey="current_stock" /></TableHead>
-              <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('total_amount')}>Total Amount <SortIcon columnKey="total_amount" /></TableHead>
+              {isSnapshotActive ? (
+                <>
+                  {isDateFilterActive && (
+                    <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('opening_stock')}>
+                      Opening Stock <SortIcon columnKey="opening_stock" />
+                    </TableHead>
+                  )}
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('produced_in_period')}>
+                    + Produced <SortIcon columnKey="produced_in_period" />
+                  </TableHead>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('sold_in_period')}>
+                    {isSalesmanFilterActive ? `- Sold (${selectedSalesman})` : "- Sold"} <SortIcon columnKey="sold_in_period" />
+                  </TableHead>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('sold_amount')}>
+                    Sold Amount <SortIcon columnKey="sold_amount" />
+                  </TableHead>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('closing_stock')}>
+                    Closing Stock <SortIcon columnKey="closing_stock" />
+                  </TableHead>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('closing_value')}>
+                    Closing Value <SortIcon columnKey="closing_value" />
+                  </TableHead>
+                </>
+              ) : (
+                <>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('current_stock')}>Current Stock <SortIcon columnKey="current_stock" /></TableHead>
+                  <TableHead className="font-medium cursor-pointer hover:bg-zinc-100" onClick={() => handleSort('total_amount')}>Total Amount <SortIcon columnKey="total_amount" /></TableHead>
+                </>
+              )}
               {canManage && <TableHead className="text-right font-medium">Action</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={isSnapshotActive ? (isDateFilterActive ? (canManage ? 10 : 9) : (canManage ? 9 : 8)) : (canManage ? 6 : 5)} className="text-center py-10 text-muted-foreground italic">
                   Loading products...
                 </TableCell>
               </TableRow>
             ) : filteredAndSortedProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={canManage ? 6 : 5} className="text-center py-10 text-muted-foreground italic">
+                <TableCell colSpan={isSnapshotActive ? (isDateFilterActive ? (canManage ? 10 : 9) : (canManage ? 9 : 8)) : (canManage ? 6 : 5)} className="text-center py-10 text-muted-foreground italic">
                   No products found.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredAndSortedProducts.map((p) => (
+              filteredAndSortedProducts.map((p) => {
+                const stock = (isSnapshotActive ? p.closing_stock : p.current_stock) ?? 0;
+                const threshold = p.stock_threshold ?? 0;
+                const isLow = threshold > 0 && stock <= threshold;
+                const isEmpty = stock === 0;
+                const soldUnits = p.sold_in_period ?? 0;
+                const producedUnits = p.produced_in_period ?? 0;
+                const soldVal = p.sold_amount ?? (soldUnits * p.price);
+
+                return (
                 <TableRow key={p.uuid} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-zinc-500">{p.category_name}</TableCell>
                   <TableCell className="text-zinc-500">₦ {p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell>
-                    {(() => {
-                      const stock = p.current_stock ?? 0;
-                      const threshold = p.stock_threshold ?? 0;
-                      const isLow = threshold > 0 && stock <= threshold;
-                      const isEmpty = stock === 0;
-                      return (
+                  {isSnapshotActive ? (
+                    <>
+                      {isDateFilterActive && (
+                        <TableCell className="text-zinc-600 tabular-nums">
+                          {p.opening_stock ?? 0} units
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <span className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums",
+                          producedUnits > 0 ? "bg-emerald-50 text-emerald-700" : "text-zinc-400"
+                        )}>
+                          +{producedUnits} units
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums",
+                          soldUnits > 0 ? "bg-blue-50 text-blue-700" : "text-zinc-400"
+                        )}>
+                          {soldUnits} units
+                        </span>
+                      </TableCell>
+                      <TableCell className={cn("font-medium tabular-nums", soldVal > 0 ? "text-emerald-700" : "text-zinc-400")}>
+                        ₦ {soldVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
                           isEmpty && threshold > 0
                             ? "bg-red-100 text-red-700"
@@ -460,12 +724,30 @@ export default function ProductPage() {
                           {isLow && <span>⚠</span>}
                           {stock} units
                         </span>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell className="text-zinc-500 font-medium">
-                    ₦ {(p.price * (p.current_stock ?? 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </TableCell>
+                      </TableCell>
+                      <TableCell className="text-zinc-500 font-medium tabular-nums">
+                        ₦ {(p.price * stock).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </>
+                  ) : (
+                    <>
+                      <TableCell>
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isEmpty && threshold > 0
+                            ? "bg-red-100 text-red-700"
+                            : isLow
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}>
+                          {isLow && <span>⚠</span>}
+                          {stock} units
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-zinc-500 font-medium">
+                        ₦ {(p.price * stock).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </>
+                  )}
                   {canManage && (
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -489,7 +771,7 @@ export default function ProductPage() {
                     </TableCell>
                   )}
                 </TableRow>
-              ))
+              )})
             )}
           </TableBody>
         </Table>

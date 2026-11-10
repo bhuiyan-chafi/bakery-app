@@ -60,7 +60,17 @@ def create_app():
     @app.cli.command("seed-db")
     def seed_db():
         """Seeds the database with initial data."""
+        from sqlalchemy import text
         from app.models.user import User, UserStatus, Permission, UserPermission, UserPermissionStatus
+
+        # 0. Ensure new schema columns exist on existing tables
+        try:
+            db.session.execute(text("ALTER TABLE productions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"))
+            db.session.execute(text("ALTER TABLE product_transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP"))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Schema check notice: {e}")
 
         # 1. Ensure initial permissions exist
         initial_perms = [

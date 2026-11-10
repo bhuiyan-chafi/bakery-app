@@ -264,6 +264,8 @@ def update_order(order_uuid):
                 order_uuid=order.uuid,
                 transaction_type=ProductTransactionType.OUT,
                 quantity=qty,
+                created_at=order.created_at or datetime.utcnow(),
+                updated_at=datetime.utcnow(),
                 notes=f"Order {order.order_number} (updated)"
             )
             db.session.add(tx)
@@ -295,6 +297,10 @@ def update_order(order_uuid):
             
             order.discount_amount = discount_amt
             order.total = round(max(order.subtotal - discount_amt, 0), 4)
+
+    if order.status == OrderStatus.CANCELLED:
+        from app.models.product import ProductTransaction
+        ProductTransaction.query.filter_by(order_uuid=order.uuid).delete()
 
     order.updated_at = datetime.utcnow()
     db.session.commit()
@@ -406,7 +412,7 @@ def get_my_deliveries():
 
 # ── GET /orders/salesmen ─────────────────────────────────────────────────────
 @order_bp.route('/salesmen', methods=['GET'], strict_slashes=False)
-@require_permission('order:view', 'order:manage')
+@require_permission('order:view', 'order:manage', 'product:view', 'product:manage')
 def get_salesmen():
     """Return all ACTIVE users available as delivery persons."""
     from app.models.user import User, UserStatus

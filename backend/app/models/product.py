@@ -71,6 +71,7 @@ class Production(db.Model):
     recipe_uuid = db.Column(db.String(36), db.ForeignKey('recipes.uuid'), nullable=False)
     status = db.Column(db.Enum(ProductionStatus, values_callable=lambda obj: [e.value for e in obj]), nullable=False, default=ProductionStatus.PENDING)
     produced_at = db.Column(db.DateTime, nullable=True)  # set only when status → completed
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     def __repr__(self):
@@ -96,6 +97,7 @@ class ProductTransaction(db.Model):
     )
     quantity = db.Column(db.Float, nullable=False)  # always > 0; 1 for single, batch_qty for batch
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     def __repr__(self):

@@ -46,6 +46,7 @@ def get_productions():
             "recipe_name": recipe.name if recipe else None,
             "status": p.status.value,
             "produced_at": p.produced_at.isoformat() if p.produced_at else None,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
             "notes": p.notes,
             "end_products": end_products
         })
@@ -200,13 +201,19 @@ def update_production(prod_uuid):
 
             validated_items.append((prod_id, qty_float))
 
+        if production.status == ProductionStatus.COMPLETED and not production.produced_at:
+            production.produced_at = dt.utcnow()
+
+        tx_created_at = production.produced_at or dt.utcnow()
+        now_ts = dt.utcnow()
+
         # Clear existing IN transactions for this production run
         ProductTransaction.query.filter_by(
             production_uuid=production.uuid,
             transaction_type=ProductTransactionType.IN
         ).delete()
 
-        # Add updated IN transactions
+        # Add updated IN transactions preserving original production date in created_at
         for prod_id, qty_float in validated_items:
             product_tx = ProductTransaction(
                 product_uuid=prod_id,
@@ -214,13 +221,13 @@ def update_production(prod_uuid):
                 recipe_uuid=production.recipe_uuid,
                 transaction_type=ProductTransactionType.IN,
                 quantity=qty_float,
+                created_at=tx_created_at,
+                updated_at=now_ts,
                 notes=f"Generated from production run {production.uuid}"
             )
             db.session.add(product_tx)
 
-        if production.status == ProductionStatus.COMPLETED and not production.produced_at:
-            production.produced_at = dt.utcnow()
-
+    production.updated_at = dt.utcnow()
     db.session.commit()
     return jsonify({"message": "Production updated successfully"}), 200
 
